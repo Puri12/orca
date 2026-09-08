@@ -1,10 +1,11 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
+import { getOmoJobRosterHelperLines } from './agent-status-omo-roster-source'
 
 // Why: keep the generated handler registrations separate from hook transport;
 // both are independently sizeable and the installed extension concatenates them.
 export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
   const sessionStartHandler =
-    kind !== 'omp'
+    kind !== 'omp' && kind !== 'omo'
       ? [
           "  pi.on('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
@@ -20,6 +21,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
   // Why: OMP can switch sessions in-process, so each latest-only post needs fresh identity.
   const ctxParam = ', ctx'
   const bareCtxParams = '_event, ctx'
+  const rosterSpread = kind === 'omo' ? ['      ...rosterExtras(),'] : []
+  const rosterInline = kind === 'omo' ? '...rosterExtras(), ' : ''
+  const rosterArgument = kind === 'omo' ? ', { ...rosterExtras() }' : ''
   const captureSessionMetadata = ['    updateRuntimeOmpSessionMetadata(ctx)']
   const primeDaemonWorkerGuard =
     kind === 'prime-agent'
@@ -39,8 +43,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
       : [
           `  pi.on('tool_approval_requested', (event${ctxParam}) => {`,
           ...captureSessionMetadata,
-          '    if (!isOmpRuntime()) return',
+          '    if (!isOmoRuntime() && !isOmpRuntime()) return',
           "    post('tool_approval_requested', {",
+          ...rosterSpread,
           '      tool_name: event.toolName,',
           '      reason: event.reason,',
           '      approval_mode: event.approvalMode,',
@@ -49,8 +54,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           '',
           `  pi.on('tool_approval_resolved', (event${ctxParam}) => {`,
           ...captureSessionMetadata,
-          '    if (!isOmpRuntime()) return',
+          '    if (!isOmoRuntime() && !isOmpRuntime()) return',
           "    post('tool_approval_resolved', {",
+          ...rosterSpread,
           '      tool_name: event.toolName,',
           '      approved: event.approved,',
           '    })',
@@ -94,22 +100,37 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  const selfPid = String(process.pid)',
     '  if (ownerPid && ownerPid !== selfPid) return',
     `  process.env.${ownerEnv} = selfPid`,
+    ...(kind === 'omo' ? getOmoJobRosterHelperLines() : []),
     ...sessionStartHandler,
     `  pi.on('before_agent_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
-    "    post('before_agent_start', { prompt: event.prompt ?? '' })",
+    ...(kind === 'omo' ? ['    retainRunningJobs()'] : []),
+    `    post('before_agent_start', { ${rosterInline}prompt: event.prompt ?? '' })`,
     '  })',
     '',
     `  pi.on('agent_start', (${bareCtxParams}) => {`,
     ...captureSessionMetadata,
     '    clearPendingAgentEndCheck()',
     '    agentEndReported = false',
-    "    post('agent_start')",
+    `    post('agent_start'${rosterArgument})`,
     '  })',
     '',
     `  pi.on('tool_execution_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
+    ...(kind === 'omo'
+      ? [
+          "    if (event.toolName === 'task') {",
+          '      const { toolCallId, args = {} } = event',
+          '      // Why: a batch spawn (args.tasks[]) is many children under one tool call; one row each.',
+          '      const specs = Array.isArray(args.tasks) && args.tasks.length',
+          '        ? args.tasks.map((t, i) => [toolCallId + ":" + i, t?.task_summary ?? t?.description])',
+          '        : [[toolCallId, args.task_summary ?? args.description]]',
+          '      for (const [rowId, summary] of specs) upsertTask(rowId, undefined, summary)',
+          '    }'
+        ]
+      : []),
     "    post('tool_execution_start', {",
+    ...rosterSpread,
     '      tool_name: event.toolName,',
     '      tool_input: event.args,',
     '    })',
@@ -118,6 +139,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     `  pi.on('tool_call', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
     "    post('tool_call', {",
+    ...rosterSpread,
     '      tool_name: event.toolName,',
     '      tool_input: event.input,',
     '    })',
@@ -125,7 +147,37 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '',
     `  pi.on('tool_execution_end', (event${ctxParam}) => {`,
     ...captureSessionMetadata,
+    ...(kind === 'omo'
+      ? [
+          '    const details = event.result?.details',
+          "    const hasStatusResult = typeof details === 'object' && details !== null",
+          "    const resultKind = typeof details?.kind === 'string' ? details.kind : undefined",
+          "    // Why: task_output/status/transcript results nest the child's task_id + terminal status",
+          "    // under details.snapshot; fall back to it so an owner's terminal observation finishes the row.",
+          "    const snapshot = typeof details?.snapshot === 'object' && details.snapshot !== null ? details.snapshot : undefined",
+          "    const effTaskId = (typeof details?.task_id === 'string' && details.task_id ? details.task_id : undefined) ?? (typeof snapshot?.task_id === 'string' && snapshot.task_id ? snapshot.task_id : undefined)",
+          '    const effStatus = details?.status ?? snapshot?.status',
+          '    const items = Array.isArray(details?.items) ? details.items : undefined',
+          '    const batchRows = [...jobRoster.keys()].filter((id) => id.startsWith(event.toolCallId + ":"))',
+          '    if (items) {',
+          '      // Why: a batch result reports each child under items[]; map them onto the batch rows in order.',
+          '      items.forEach((item, i) => {',
+          "        const tid = typeof item?.task_id === 'string' ? item.task_id : undefined",
+          "        applyStatus(tid, item?.status, batchRows[i], event.isError, true, typeof item?.kind === 'string' ? item.kind : undefined)",
+          '      })',
+          '    } else if (batchRows.length) {',
+          '      // Why: a single-item tasks[] collapses to one no-items result, and a whole-batch refusal',
+          '      // returns none; reconcile the first provisional row and finish the rest by the invocation outcome.',
+          '      applyStatus(effTaskId, effStatus, batchRows[0], event.isError, hasStatusResult, resultKind)',
+          '      for (const rowId of batchRows.slice(1)) applyStatus(undefined, effStatus, rowId, event.isError, hasStatusResult, resultKind)',
+          '    } else {',
+          '      // Why: a refused spawn returns a terminal status with an empty task_id; finish the row by isError.',
+          '      applyStatus(effTaskId, effStatus, event.toolCallId, event.isError, hasStatusResult, resultKind)',
+          '    }'
+        ]
+      : []),
     "    post('tool_execution_end', {",
+    ...rosterSpread,
     '      tool_name: event.toolName,',
     '    })',
     '  })',
@@ -140,7 +192,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     "    if (event.message?.role !== 'assistant') return",
     '    const text = extractAssistantText(event.message)',
     '    if (!text) return',
-    "    post('message_end', { role: 'assistant', text })",
+    `    post('message_end', { ${rosterInline}role: 'assistant', text })`,
     '  })',
     '',
     '  // Why: modern Pi stays non-idle across retry/compaction/follow-up work,',
@@ -166,7 +218,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  function postAgentEndOnce(): void {',
     '    if (agentEndReported) return',
     '    agentEndReported = true',
-    "    post('agent_end')",
+    `    post('agent_end'${rosterArgument})`,
     '  }',
     '',
     '  function checkPendingAgentEnd(): void {',

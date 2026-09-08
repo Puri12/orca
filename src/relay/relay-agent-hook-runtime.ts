@@ -124,6 +124,18 @@ export class RelayAgentHookRuntime {
         env.ORCA_OMP_SOURCE_AGENT_DIR = result.sourceAgentDir
       }
     }
+    if (kind === 'omo') {
+      const sourceDir = resolvePiSourceAgentDir(context.env, context.shell, 'omo')
+      const result = this.pluginOverlay.materializePi(overlayId, sourceDir, 'omo', {
+        materializeDefaultHome: explicitKind === 'omo'
+      })
+      if (result?.statusExtensionPath) {
+        env.ORCA_OMO_STATUS_EXTENSION = result.statusExtensionPath
+      }
+      if (result?.sourceAgentDir) {
+        env.ORCA_OMO_SOURCE_AGENT_DIR = result.sourceAgentDir
+      }
+    }
     if (kind === 'prime-agent') {
       const sourceDir = resolvePiSourceAgentDir(context.env, context.shell, 'prime-agent')
       const result = this.pluginOverlay.materializePi(overlayId, sourceDir, 'prime-agent', {
@@ -145,15 +157,18 @@ export class RelayAgentHookRuntime {
       const opencode = params.opencodePluginSource
       const pi = params.piExtensionSource
       const omp = params.ompExtensionSource
+      const omo = params.omoExtensionSource
       const primeAgent = params.primeAgentExtensionSource
       assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
       assertPluginSourceUnderByteCap('piExtensionSource', pi)
       assertPluginSourceUnderByteCap('ompExtensionSource', omp)
+      assertPluginSourceUnderByteCap('omoExtensionSource', omo)
       assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
       this.pluginOverlay.setSources({
         opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
         piExtensionSource: typeof pi === 'string' ? pi : undefined,
         ompExtensionSource: typeof omp === 'string' ? omp : undefined,
+        omoExtensionSource: typeof omo === 'string' ? omo : undefined,
         primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
       })
       return {
@@ -161,6 +176,7 @@ export class RelayAgentHookRuntime {
           opencode: this.pluginOverlay.hasOpenCodeSource(),
           pi: this.pluginOverlay.hasPiSource('pi'),
           omp: this.pluginOverlay.hasPiSource('omp'),
+          omo: this.pluginOverlay.hasPiSource('omo'),
           primeAgent: this.pluginOverlay.hasPiSource('prime-agent')
         }
       }

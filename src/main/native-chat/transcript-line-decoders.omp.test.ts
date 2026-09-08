@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { decodeOmpTranscriptLine } from './transcript-line-decoders'
+import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
 
 const line = (record: unknown): string => JSON.stringify(record)
 
@@ -13,6 +14,10 @@ const message = (role: string, content: unknown, extra: Record<string, unknown> 
   })
 
 describe('decodeOmpTranscriptLine', () => {
+  it('is the decoder native chat uses for omo', () => {
+    expect(nativeChatLineDecoderForAgent('omo')).toBe(decodeOmpTranscriptLine)
+  })
+
   it('skips malformed lines and non-conversation records', () => {
     expect(decodeOmpTranscriptLine('not json', 'f')).toBeNull()
     expect(decodeOmpTranscriptLine(line({ type: 'session_init', id: 'a' }), 'f')).toBeNull()

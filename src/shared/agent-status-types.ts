@@ -41,6 +41,7 @@ export type WellKnownAgentType =
   | 'aider'
   | 'pi'
   | 'omp'
+  | 'omo'
   | 'prime-agent'
   | 'droid'
   | 'command-code'
@@ -87,6 +88,25 @@ export type AgentStatusOrchestrationContext = {
 
 export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle'
 
+export const AGENT_SUBAGENT_JOB_LIFECYCLES = [
+  'queued',
+  'running',
+  'blocked',
+  'waiting',
+  'succeeded',
+  'failed',
+  'cancelled',
+  'unknown'
+] as const
+export type AgentSubagentJobLifecycle = (typeof AGENT_SUBAGENT_JOB_LIFECYCLES)[number]
+
+// Why: omo's Pi-compatible background jobs ride the subagent roster to keep dashboard updates push/patch-only, without polling.
+export type AgentSubagentJob = {
+  taskId?: string
+  lifecycle?: AgentSubagentJobLifecycle
+  currentStep?: string
+}
+
 /** A live in-process child of the pane's provider session. Rendered as an
  *  indented child row with no PTY of its own. */
 export type AgentSubagentSnapshot = {
@@ -97,6 +117,7 @@ export type AgentSubagentSnapshot = {
   model?: string
   description?: string
   state: AgentSubagentState
+  job?: AgentSubagentJob
   /** Timestamp (ms) when this subagent was first observed. */
   startedAt: number
 }
@@ -283,32 +304,35 @@ export const AGENT_STATUS_JSON_STRUCTURE_LIMITS = {
   nestingDepth: 16
 } as const
 const AGENT_SUBAGENT_ID_MAX_LENGTH = 64
+const VALID_SUBAGENT_STATES = new Set<unknown>(['working', 'blocked', 'waiting', 'idle'])
+const VALID_JOB_LIFECYCLES: ReadonlySet<string> = new Set(AGENT_SUBAGENT_JOB_LIFECYCLES)
 
 function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
   const obj = value as Record<string, unknown>
-  if (typeof obj.id !== 'string') {
+  const id = typeof obj.id === 'string' ? obj.id.trim() : ''
+  if (!id || id.length > AGENT_SUBAGENT_ID_MAX_LENGTH || !VALID_SUBAGENT_STATES.has(obj.state)) {
     return null
   }
-  const id = obj.id.trim()
-  if (id.length === 0 || id.length > AGENT_SUBAGENT_ID_MAX_LENGTH) {
-    return null
-  }
-  if (
-    obj.state !== 'working' &&
-    obj.state !== 'blocked' &&
-    obj.state !== 'waiting' &&
-    obj.state !== 'idle'
-  ) {
-    return null
+  let job: AgentSubagentJob | undefined
+  if (typeof obj.job === 'object' && obj.job !== null && !Array.isArray(obj.job)) {
+    const { taskId, currentStep, lifecycle } = obj.job as Record<string, unknown>
+    job = {
+      taskId: normalizeOptionalField(taskId, AGENT_SUBAGENT_ID_MAX_LENGTH),
+      currentStep: normalizeOptionalField(currentStep, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
+      lifecycle:
+        typeof lifecycle === 'string' && VALID_JOB_LIFECYCLES.has(lifecycle)
+          ? (lifecycle as AgentSubagentJobLifecycle)
+          : undefined
+    }
   }
   return {
     id,
-    state: obj.state,
-    startedAt:
-      typeof obj.startedAt === 'number' && Number.isFinite(obj.startedAt) ? obj.startedAt : 0,
+    state: obj.state as AgentSubagentState,
+    ...(job && (job.taskId || job.lifecycle || job.currentStep) ? { job } : {}),
+    startedAt: Number.isFinite(obj.startedAt) ? (obj.startedAt as number) : 0,
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
     model: normalizeOptionalField(obj.model, AGENT_MODEL_MAX_LENGTH),
     description: normalizeOptionalField(obj.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
@@ -338,27 +362,23 @@ export function agentSubagentsEqual(
   a: AgentSubagentSnapshot[] | undefined,
   b: AgentSubagentSnapshot[] | undefined
 ): boolean {
-  if (a === b) {
-    return true
+  if (a === b || !a || !b || a.length !== b.length) {
+    return a === b
   }
-  if (!a || !b || a.length !== b.length) {
-    return !a && !b
-  }
-  for (let i = 0; i < a.length; i++) {
-    const x = a[i]
+  return a.every((x, i) => {
     const y = b[i]
-    if (
-      x.id !== y.id ||
-      x.state !== y.state ||
-      x.startedAt !== y.startedAt ||
-      x.agentType !== y.agentType ||
-      x.model !== y.model ||
-      x.description !== y.description
-    ) {
-      return false
-    }
-  }
-  return true
+    return (
+      x.id === y.id &&
+      x.state === y.state &&
+      x.startedAt === y.startedAt &&
+      x.agentType === y.agentType &&
+      x.model === y.model &&
+      x.description === y.description &&
+      x.job?.taskId === y.job?.taskId &&
+      x.job?.lifecycle === y.job?.lifecycle &&
+      x.job?.currentStep === y.job?.currentStep
+    )
+  })
 }
 
 /**

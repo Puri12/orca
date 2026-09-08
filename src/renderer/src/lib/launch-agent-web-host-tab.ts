@@ -12,6 +12,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
 import { translate } from '@/i18n/i18n'
 import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operation'
+import { legacyLaunchMustOmitAgentIdentity } from '@/runtime/agent-resume-host-authority-capability'
 
 function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
   const state = useAppStore.getState()
@@ -22,6 +23,70 @@ function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
       state.closeTab(tab.id, { reason: 'cleanup' })
     }
   }
+}
+
+/** The launch-argument object sent to the web-runtime creation surface. Extracted as a pure
+ *  builder so the no-prompt legacy-fallback contract (command must survive) is unit-testable
+ *  without the transport. */
+export function buildWebHostTabLaunch(args: {
+  agent: TuiAgent
+  worktreeId: string
+  environmentId: string | null
+  groupId?: string
+  cwd?: string | null
+  startupPlan: AgentStartupPlan
+  prompt: string
+  promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
+  pastePromptAfterReady: string | null
+  agentArgs?: string | null
+  viewMode?: Tab['viewMode']
+}) {
+  const {
+    agent,
+    worktreeId,
+    environmentId,
+    groupId,
+    cwd,
+    startupPlan,
+    prompt,
+    promptDelivery,
+    pastePromptAfterReady,
+    agentArgs,
+    viewMode
+  } = args
+  const hasPrompt = prompt.length > 0
+  const launchPreferences = toAgentLaunchPreferences(startupPlan.sessionOptions)
+  const structuredPromptDelivery: AgentPromptDelivery =
+    promptDelivery === 'draft' ? 'draft' : 'auto-submit'
+  return {
+    worktreeId,
+    environmentId,
+    targetGroupId: groupId,
+    activate: true,
+    ...(cwd?.trim() ? { cwd } : {}),
+    ...(viewMode ? { viewMode } : {}),
+    agentSessionKind: 'fresh',
+    // Why: a prompted launch always carries its launch command; a no-prompt launch of an enum-gated
+    // agent (omo) also must, because on a pre-omo host the per-agent gate drops `agent` and the
+    // command becomes the only thing left to launch it. Other agents keep the minimal no-prompt shape.
+    ...(hasPrompt || legacyLaunchMustOmitAgentIdentity(agent)
+      ? {
+          launchAgent: agent,
+          command: startupPlan.launchCommand,
+          ...(startupPlan.env ? { env: startupPlan.env } : {}),
+          launchConfig: startupPlan.launchConfig,
+          ...(startupPlan.startupCommandDelivery
+            ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
+            : {})
+        }
+      : { agent }),
+    ...(hasPrompt && pastePromptAfterReady === null ? { prompt } : {}),
+    ...(hasPrompt && pastePromptAfterReady === null
+      ? { promptDelivery: structuredPromptDelivery }
+      : {}),
+    ...(agentArgs !== undefined ? { agentArgs } : {}),
+    ...(launchPreferences ? { launchPreferences } : {})
+  } as const
 }
 
 /**
@@ -63,36 +128,20 @@ export function launchAgentInWebHostTab(args: {
     onPromptDelivered
   } = args
   const hasPrompt = prompt.length > 0
-  const launchPreferences = toAgentLaunchPreferences(startupPlan.sessionOptions)
-  const structuredPromptDelivery: AgentPromptDelivery =
-    promptDelivery === 'draft' ? 'draft' : 'auto-submit'
   removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
-  const launch = {
+  const launch = buildWebHostTabLaunch({
+    agent,
     worktreeId,
     environmentId,
-    targetGroupId: groupId,
-    activate: true,
-    ...(cwd?.trim() ? { cwd } : {}),
-    ...(viewMode ? { viewMode } : {}),
-    agentSessionKind: 'fresh',
-    ...(hasPrompt
-      ? {
-          launchAgent: agent,
-          command: startupPlan.launchCommand,
-          ...(startupPlan.env ? { env: startupPlan.env } : {}),
-          launchConfig: startupPlan.launchConfig,
-          ...(startupPlan.startupCommandDelivery
-            ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-            : {})
-        }
-      : { agent }),
-    ...(hasPrompt && pastePromptAfterReady === null ? { prompt } : {}),
-    ...(hasPrompt && pastePromptAfterReady === null
-      ? { promptDelivery: structuredPromptDelivery }
-      : {}),
-    ...(agentArgs !== undefined ? { agentArgs } : {}),
-    ...(launchPreferences ? { launchPreferences } : {})
-  } as const
+    groupId,
+    cwd,
+    startupPlan,
+    prompt,
+    promptDelivery,
+    pastePromptAfterReady,
+    agentArgs,
+    viewMode
+  })
 
   const handleCreation = ({
     outcome,

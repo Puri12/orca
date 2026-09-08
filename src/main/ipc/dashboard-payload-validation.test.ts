@@ -402,6 +402,31 @@ describe('dashboard payload validation', () => {
       expect(admitted?.snapshot.cards).toHaveLength(1)
     })
 
+    it('admits a card whose subagent job is malformed by stripping the job', () => {
+      const admitted = admitDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [
+          {
+            ...SNAPSHOT.cards[0],
+            subagents: [
+              {
+                id: 'child-1',
+                name: 'Review loop',
+                dotState: 'working',
+                job: { lifecycle: 'bogus' }
+              }
+            ]
+          }
+        ]
+      })
+
+      expect(admitted?.droppedCardCount).toBe(0)
+      expect(admitted?.snapshot.cards).toHaveLength(1)
+      expect(admitted?.snapshot.cards[0]?.subagents).toEqual([
+        { id: 'child-1', name: 'Review loop', dotState: 'working' }
+      ])
+    })
+
     it('drops a card that fails only the search-board fields', () => {
       const good = SNAPSHOT.cards[0]
       const badReview = { ...good, paneKey: 'p2', review: { number: 0, state: 'open' } }

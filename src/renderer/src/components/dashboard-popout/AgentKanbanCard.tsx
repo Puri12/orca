@@ -72,7 +72,10 @@ function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagent
     if (
       subagent.id !== other.id ||
       subagent.name !== other.name ||
-      subagent.dotState !== other.dotState
+      subagent.dotState !== other.dotState ||
+      subagent.job?.taskId !== other.job?.taskId ||
+      subagent.job?.lifecycle !== other.job?.lifecycle ||
+      subagent.job?.currentStep !== other.job?.currentStep
     ) {
       return false
     }
@@ -307,6 +310,11 @@ export const AgentKanbanCard = memo(
                   >
                     <AgentStateDot state={subagent.dotState} />
                     <span className="truncate">{subagent.name}</span>
+                    {subagent.job?.currentStep || subagent.job?.lifecycle ? (
+                      <span className="truncate text-[10.5px] text-muted-foreground">
+                        {subagent.job.currentStep || subagent.job.lifecycle}
+                      </span>
+                    ) : null}
                   </div>
                 ))}
               </div>

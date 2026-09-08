@@ -61,6 +61,7 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
       return eventName === 'beforeSubmitPrompt' || eventName === 'sessionStart'
     case 'pi':
     case 'omp':
+    case 'omo':
     case 'prime-agent':
       return eventName === 'before_agent_start'
     case 'droid':
@@ -156,6 +157,7 @@ export function extractToolFields(
       return extractCursorToolFields(eventName, hookPayload)
     case 'pi':
     case 'omp':
+    case 'omo':
     case 'prime-agent':
       return extractPiToolFields(eventName, hookPayload, source)
     case 'droid':

@@ -155,6 +155,14 @@ export function buildSkillDiscoverySources(
       ['agent-skills'],
       'omp'
     ),
+    source(
+      'home-omo',
+      'omo home',
+      pathApi.join(home, '.omo', 'agent', 'skills'),
+      'home',
+      ['agent-skills'],
+      'omo'
+    ),
     source('home-hermes', 'Hermes home', hermesSkillsRoot, 'home', ['agent-skills'], 'hermes'),
     source(
       'home-prime-agent',

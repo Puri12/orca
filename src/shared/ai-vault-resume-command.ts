@@ -32,7 +32,7 @@ export function buildAiVaultResumeCommand(args: {
   // discovered under, where an id-prefix lookup scoped to the default store
   // would miss it. Falls back to the id if no path is known.
   const resumeTarget =
-    (agent === 'omp' || agent === 'prime-agent') && resumeFilePath?.trim()
+    (agent === 'omp' || agent === 'omo' || agent === 'prime-agent') && resumeFilePath?.trim()
       ? resumeFilePath.trim()
       : sessionId
   const sessionArg =
@@ -225,6 +225,7 @@ function buildAgentResumeInvocation(
     // identical to the others here.
     // falls through
     case 'omp':
+    case 'omo':
     case 'prime-agent':
       return `${baseCommand} --resume ${sessionArg}`
     case 'antigravity':

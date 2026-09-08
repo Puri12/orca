@@ -64,7 +64,8 @@ export async function readNativeChatTranscript(
     if (transcriptAgent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
     }
-    if (transcriptAgent === 'omp') {
+    // Why: omo writes the same senpi transcript format as omp.
+    if (transcriptAgent === 'omp' || transcriptAgent === 'omo') {
       return { messages: await readTranscript(filePath, decodeOmpTranscriptLine) }
     }
     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }

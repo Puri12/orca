@@ -120,6 +120,25 @@ describe('restoreShedStatusFields', () => {
     expect(restored).toBe(shed)
   })
 
+  it('does not restore the cached roster when only a job field changed (job-aware digest)', () => {
+    // Why: omo job progress rides the roster; a shed roster with the same ids but a newer
+    // step must not resurrect the old step as if it matched the host's evidence.
+    const jobRoster = [
+      {
+        id: 'job-a',
+        state: 'working' as const,
+        startedAt: 1,
+        job: { taskId: 'task-a', lifecycle: 'running' as const, currentStep: 'old step' }
+      }
+    ]
+    const cachedWithJob: ParsedAgentStatusPayload = { ...cached, subagents: jobRoster }
+    const newer = [{ ...jobRoster[0], job: { ...jobRoster[0].job, currentStep: 'new step' } }]
+    const restored = restoreShedStatusFields(shed, [createShedSubagentsField(newer)], cachedWithJob)
+    expect(restored.subagents).toBeUndefined()
+    // A jobless roster keeps the legacy digest so older peers still match.
+    expect(createShedSubagentsField(roster)).toBe(createShedSubagentsField([...roster]))
+  })
+
   it('never restores interactivePrompt — a stale answerable card is worse than none', () => {
     const restored = restoreShedStatusFields(shed, ['interactivePrompt'], cached)
     expect(restored.interactivePrompt).toBeUndefined()

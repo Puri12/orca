@@ -1,4 +1,4 @@
-import type { AgentType, AgentWorkingMode } from './agent-status-types'
+import type { AgentSubagentJob, AgentType, AgentWorkingMode } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { TuiAgent } from './tui-agent'
@@ -56,6 +56,7 @@ export type DashboardCardSubagent = {
   id: string
   name: string
   dotState: DashboardCardDotState
+  job?: AgentSubagentJob
 }
 
 export type DashboardCardHostKind = 'local' | 'ssh' | 'wsl' | 'remote'

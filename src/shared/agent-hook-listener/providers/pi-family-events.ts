@@ -10,13 +10,13 @@ import { readString } from '../tool-input-preview'
 
 export function normalizePiCompatibleEvent(
   state: HookListenerState,
-  agentType: 'pi' | 'omp' | 'prime-agent',
+  agentType: 'pi' | 'omp' | 'omo' | 'prime-agent',
   eventName: unknown,
   promptText: string,
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
-  if (agentType !== 'omp' && eventName === 'session_start') {
+  if (agentType !== 'omp' && agentType !== 'omo' && eventName === 'session_start') {
     // Why: Pi's session_start fires on TUI open/resume; discard stale turn details, no working row before user activity.
     clearPaneTurnCacheState(state, paneKey)
     return null
@@ -26,10 +26,12 @@ export function normalizePiCompatibleEvent(
   const toolName = readString(hookPayload, 'tool_name')
   const isPiCompatibleAsk =
     ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
-      (agentType === 'omp' && toolName === 'ask')) &&
+      ((agentType === 'omp' || agentType === 'omo') && toolName === 'ask')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
-  const isOmpApprovalRequest = agentType === 'omp' && eventName === 'tool_approval_requested'
-  const isOmpApprovalResolution = agentType === 'omp' && eventName === 'tool_approval_resolved'
+  const isOmpApprovalRequest =
+    (agentType === 'omp' || agentType === 'omo') && eventName === 'tool_approval_requested'
+  const isOmpApprovalResolution =
+    (agentType === 'omp' || agentType === 'omo') && eventName === 'tool_approval_resolved'
 
   const stateName =
     isPiCompatibleAsk || isOmpApprovalRequest
@@ -67,6 +69,10 @@ export function normalizePiCompatibleEvent(
     toolInput: snapshot.toolInput,
     interactivePrompt: snapshot.interactivePrompt,
     lastAssistantMessage: snapshot.lastAssistantMessage,
-    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
+    lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput,
+    // Why: omo reports its background jobs as a subagent roster; forwarding it is what makes them appear live on the dashboard.
+    ...(agentType === 'omo' && hookPayload.subagents !== undefined
+      ? { subagents: hookPayload.subagents }
+      : {})
   })
 }

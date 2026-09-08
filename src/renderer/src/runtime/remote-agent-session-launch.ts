@@ -7,10 +7,13 @@ export async function runRemoteAgentSessionLaunch<TResult>(args: {
   environmentId: string
   hostAuthority?: () => Promise<TResult>
   hostAuthorityCapability?: RuntimeCapability
-  legacy: (options: { skipCompatibilityCheck: boolean }) => Promise<TResult>
+  legacy: (options: {
+    skipCompatibilityCheck: boolean
+    hostLacksAgentCapability: boolean
+  }) => Promise<TResult>
 }): Promise<TResult> {
   if (!args.hostAuthority) {
-    return await args.legacy({ skipCompatibilityCheck: false })
+    return await args.legacy({ skipCompatibilityCheck: false, hostLacksAgentCapability: false })
   }
   let supported: boolean
   try {
@@ -24,12 +27,15 @@ export async function runRemoteAgentSessionLaunch<TResult>(args: {
     }
     // Why: a failed read-only probe has not launched anything, so preserving
     // the legacy path cannot duplicate an agent and keeps transient upgrades neutral.
-    return await args.legacy({ skipCompatibilityCheck: true })
+    return await args.legacy({ skipCompatibilityCheck: true, hostLacksAgentCapability: false })
   }
   // Why: choose before invoking either path; an ambiguous structured outcome
   // must never trigger a legacy retry that could spawn a duplicate.
   if (!supported) {
-    return await args.legacy({ skipCompatibilityCheck: true })
+    return await args.legacy({
+      skipCompatibilityCheck: true,
+      hostLacksAgentCapability: args.hostAuthorityCapability !== undefined
+    })
   }
   try {
     return await args.hostAuthority()
@@ -40,7 +46,7 @@ export async function runRemoteAgentSessionLaunch<TResult>(args: {
     ) {
       // Why: both responses prove no structured side effect began: the new host rejected an old
       // lower owner before dispatch, or an old host never recognized the method.
-      return await args.legacy({ skipCompatibilityCheck: true })
+      return await args.legacy({ skipCompatibilityCheck: true, hostLacksAgentCapability: false })
     }
     throw error
   }

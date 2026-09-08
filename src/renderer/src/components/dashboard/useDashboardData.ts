@@ -1,4 +1,8 @@
-import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import type {
+  AgentStatusEntry,
+  AgentSubagentJob,
+  AgentType
+} from '../../../../shared/agent-status-types'
 import type { AgentRowState } from '@/lib/agent-row-decay-state'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
@@ -10,6 +14,7 @@ export type DashboardAgentRow = {
   tab: TerminalTab
   agentType: AgentType
   rowSource?: 'live' | 'retained' | 'subagent'
+  job?: AgentSubagentJob
   state: AgentRowState
   /** Pane to focus when the row is activated, when it differs from paneKey.
    *  Subagent rows have no pane of their own and activate their parent's. */

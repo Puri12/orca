@@ -1,6 +1,6 @@
 import type { TuiAgent } from './tui-agent'
 
-export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp'
+export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp' | 'omo'
 
 /** Agents whose transcripts the native chat view can parse and render, in the
  *  order the settings pane advertises them. */
@@ -9,7 +9,8 @@ export const NATIVE_CHAT_SUPPORTED_AGENT_LIST: readonly TuiAgent[] = [
   'openclaude',
   'codex',
   'grok',
-  'omp'
+  'omp',
+  'omo'
 ]
 
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set(
@@ -26,7 +27,7 @@ export function isNativeChatSupportedAgent(agent: string | null | undefined): bo
  *  so the chat view must stay closed instead of loading forever. */
 export function nativeChatRequiresLocalTranscript(agent: string | null | undefined): boolean {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  return transcriptAgent === 'grok' || transcriptAgent === 'omp'
+  return transcriptAgent === 'grok' || transcriptAgent === 'omp' || transcriptAgent === 'omo'
 }
 
 /** True when the agent renders a digit-commit question selector that ignores
@@ -47,7 +48,8 @@ export function resolveNativeChatTranscriptAgent(
   if (agent === 'claude' || agent === 'openclaude') {
     return 'claude'
   }
-  if (agent === 'codex' || agent === 'grok' || agent === 'omp') {
+  // Why: omo shares omp's senpi format but needs its own tag to resolve its separate root.
+  if (agent === 'codex' || agent === 'grok' || agent === 'omp' || agent === 'omo') {
     return agent
   }
   return null

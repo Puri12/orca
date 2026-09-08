@@ -57,6 +57,7 @@ export function buildSubagentChildRows(args: {
       tab: args.tab,
       agentType: subagent.agentType ?? 'unknown',
       rowSource: 'subagent' as const,
+      ...(subagent.job ? { job: subagent.job } : {}),
       state,
       activationPaneKey: args.parentEntry.paneKey,
       startedAt

@@ -23,7 +23,8 @@ export function groupSubagentsByParentPaneKey(
         nonEmpty(row.entry.orchestration?.displayName) ??
         nonEmpty(row.entry.prompt) ??
         row.agentType,
-      dotState: dashboardCardDotState(row.state)
+      dotState: dashboardCardDotState(row.state),
+      ...(row.job ? { job: row.job } : {})
     }
     const existing = byParentPaneKey.get(parentPaneKey)
     if (existing) {

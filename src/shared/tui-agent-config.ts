@@ -149,6 +149,14 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: OMP wraps Pi's TUI, so the bytes land in a Pi reader that decodes CSI-u (see pi above).
     windowsShiftEnterEncoding: 'csi-u'
   },
+  omo: {
+    detectCmd: 'omo',
+    detectCmdAliases: ['senpi'],
+    promptInjectionMode: 'argv',
+    draftPromptEnvVar: 'ORCA_OMO_PREFILL',
+    // Why: omo wraps the senpi engine (Pi TUI), so CSI-u applies; senpi is the engine shim the launcher spawns.
+    windowsShiftEnterEncoding: 'csi-u'
+  },
   'prime-agent': {
     detectCmd: 'prime-agent',
     // Why: `prime-agent [options] [@files...] [message...]` takes the task as positional argv.

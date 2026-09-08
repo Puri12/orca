@@ -191,6 +191,19 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('kimi-code')).toBe(true)
   })
 
+  it('recognizes omo by its launcher and the senpi engine shim it spawns', () => {
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/omo')).toEqual({
+      agent: 'omo',
+      processName: 'omo'
+    })
+    expect(recognizeAgentProcess('senpi')).toEqual({
+      agent: 'omo',
+      processName: 'senpi'
+    })
+    expect(isExpectedAgentProcess('/Users/dev/.local/bin/omo', 'omo')).toBe(true)
+    expect(isRecognizedAgentType('omo')).toBe(true)
+  })
+
   it('recognizes Qwen Code by its installed qwen executable', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/qwen')).toEqual({
       agent: 'qwen-code',

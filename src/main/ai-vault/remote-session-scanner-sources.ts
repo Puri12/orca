@@ -103,6 +103,7 @@ export function remoteSessionSources(
       // partition keeps the children out of the top-level list (#9330).
       partitionSubagentTranscripts: partitionOmpSubagentTranscriptPaths
     },
+    jsonlSource('omo', remoteHome, hostPlatform, ['.omo', 'agent', 'sessions'], omoParser),
     jsonlSource(
       'prime-agent',
       remoteHome,
@@ -262,6 +263,16 @@ function ompParser(
   signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   return parseMessageGraphSessionContent('omp', file, content, platform, options, signal)
+}
+
+function omoParser(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform,
+  options: RemoteParserOptions,
+  signal?: AbortSignal
+): Promise<AiVaultSession | null> {
+  return parseMessageGraphSessionContent('omo', file, content, platform, options, signal)
 }
 
 function primeAgentParser(

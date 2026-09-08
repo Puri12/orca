@@ -48,6 +48,14 @@ export function resolvePiSourceAgentDir(
     return startupDir
   }
 
+  if (kind === 'omo') {
+    return firstNonEmpty(
+      env[primaryKey],
+      readStartupEnv('SENPI_CODING_AGENT_DIR', env, shell),
+      env.SENPI_CODING_AGENT_DIR
+    )
+  }
+
   if (kind === 'prime-agent') {
     return firstNonEmpty(env[primaryKey])
   }

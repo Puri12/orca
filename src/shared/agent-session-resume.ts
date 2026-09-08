@@ -14,6 +14,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'grok',
   'devin',
   'omp',
+  'omo',
   'prime-agent',
   'copilot',
   'kimi'
@@ -228,7 +229,8 @@ export function extractAgentProviderSession(
       return id ? { key: 'session_id', id } : null
     }
     // Why: OMP's managed extension reports the authoritative CLI resume id.
-    case 'omp': {
+    case 'omp':
+    case 'omo': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
@@ -283,6 +285,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id'
         ? ['omp', '--resume', ompResumeFilePath?.trim() || id]
         : null
+    case 'omo':
+      return providerSession.key === 'session_id' ? ['omo', '--resume', id] : null
     // Why: the joined form is the only one Copilot documents, and it matches the
     // flag spelling buildAgentResumeInvocation bakes into persisted AI Vault
     // resume commands, so local and remote resumes agree on one spelling.

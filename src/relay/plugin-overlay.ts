@@ -32,7 +32,7 @@ import { join } from 'node:path'
 import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'omo' | 'prime-agent'>
 
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
@@ -62,6 +62,7 @@ function withOrcaManagedPiExtensionMarker(source: string): string {
 const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
+  omo: '.omo',
   'prime-agent': '.prime'
 }
 
@@ -83,6 +84,7 @@ export type PluginSources = {
   piExtensionSource?: string
   /** Source body of OMP's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
   ompExtensionSource?: string
+  omoExtensionSource?: string
   /** Source body of Prime Agent's `orca-agent-status.ts` to install in its real agent dir. */
   primeAgentExtensionSource?: string
 }
@@ -106,6 +108,7 @@ export class PluginOverlayManager {
   private piExtensionSources: Record<PiAgentKind, string | null> = {
     pi: null,
     omp: null,
+    omo: null,
     'prime-agent': null
   }
   private homeDir: string
@@ -138,6 +141,9 @@ export class PluginOverlayManager {
     }
     if (typeof sources.ompExtensionSource === 'string') {
       this.piExtensionSources.omp = withOrcaManagedPiExtensionMarker(sources.ompExtensionSource)
+    }
+    if (typeof sources.omoExtensionSource === 'string') {
+      this.piExtensionSources.omo = withOrcaManagedPiExtensionMarker(sources.omoExtensionSource)
     }
     if (typeof sources.primeAgentExtensionSource === 'string') {
       this.piExtensionSources['prime-agent'] = withOrcaManagedPiExtensionMarker(

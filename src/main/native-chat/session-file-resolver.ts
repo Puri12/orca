@@ -74,6 +74,16 @@ function ompSessionsDir(): string {
   )
 }
 
+// Why: omo's launcher exports OMO_/SENPI_CODING_AGENT_DIR pointing at the agent dir (not sessions), so normalize like omp.
+function omoSessionsDir(): string {
+  return normalizeAgentSessionsDir(
+    process.env.OMO_CODING_AGENT_DIR?.trim() ||
+      process.env.SENPI_CODING_AGENT_DIR?.trim() ||
+      join(homedir(), '.omo', 'agent', 'sessions'),
+    '.omo'
+  )
+}
+
 export type ResolveSessionFileOptions = {
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
@@ -84,6 +94,8 @@ export type ResolveSessionFileOptions = {
   grokSessionsDir?: string
   /** Override the omp sessions root (`~/.omp/agent/sessions`). */
   ompSessionsDir?: string
+  /** Override the omo sessions root (`~/.omo/agent/sessions`). */
+  omoSessionsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -215,6 +227,10 @@ async function resolveSessionFileById(
   }
   if (transcriptAgent === 'omp') {
     return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir(), signal)
+  }
+  // Why: omo shares omp's per-cwd layout, but must never search omp's or pi's root.
+  if (transcriptAgent === 'omo') {
+    return resolveOmpSessionFile(trimmedId, options.omoSessionsDir ?? omoSessionsDir(), signal)
   }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail

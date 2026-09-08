@@ -370,9 +370,59 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(runtimeCall).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'terminal.create',
-        params: expect.objectContaining({ command: "kimi '--session' 'session_431324d7'" })
+        // Why: kimi predates its resume gate in TuiAgent, so the old host still accepts its identity.
+        params: expect.objectContaining({
+          command: "kimi '--session' 'session_431324d7'",
+          launchAgent: 'kimi'
+        })
       })
     )
+  })
+
+  it('degrades a fresh omo launch (no resume) to legacy when the host predates omo', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: 'omo',
+      launchAgent: 'omo',
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    // Why: a fresh omo launch also carries agent:'omo'; an old host with host-authority.v1 predates
+    // omo and rejects the enum with invalid_argument (not a fallback code), so the per-agent probe
+    // must keep the pane alive on the legacy path.
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.createAgentSession' })
+    )
+    expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.create' }))
+  })
+
+  it('degrades an omo resume to a legacy launch that omits the agent identity the old host cannot parse', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: "omo '--resume' 'sess_omo_1'",
+      launchAgent: 'omo',
+      resumeProviderSession: { key: 'session_id', id: 'sess_omo_1' },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    // Why: a host that predates omo validates launchAgent with its own isTuiAgent and would
+    // reject the whole create; the legacy launch must carry only the command.
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'terminal.ensureAgentSession' })
+    )
+    const legacyCreate = runtimeCall.mock.calls.find(
+      ([call]) => (call as { method?: string }).method === 'terminal.create'
+    )?.[0] as { params?: Record<string, unknown> } | undefined
+    expect(legacyCreate?.params?.command).toBe("omo '--resume' 'sess_omo_1'")
+    expect(legacyCreate?.params).not.toHaveProperty('launchAgent')
   })
 
   it('claims the Kimi provider session on a host that advertises the resume capability', async () => {

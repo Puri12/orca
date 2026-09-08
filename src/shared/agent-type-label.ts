@@ -16,6 +16,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   aider: 'Aider',
   pi: 'Pi',
   omp: 'OMP',
+  omo: 'omo',
   'prime-agent': 'Prime Agent',
   droid: 'Droid',
   'command-code': 'Command Code',

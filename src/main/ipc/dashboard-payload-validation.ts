@@ -11,6 +11,7 @@ import {
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
   AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH,
   AGENT_STATUS_MAX_FIELD_LENGTH,
+  AGENT_SUBAGENT_JOB_LIFECYCLES,
   AGENT_TYPE_MAX_LENGTH
 } from '../../shared/agent-status-types'
 import { isDashboardLaunchOptions } from './dashboard-agent-launch-validation'
@@ -35,7 +36,8 @@ const imageIconValidity = new BoundedMap<string, boolean>({
 const MAX_ID_LENGTH = 4_096
 const MAX_LABEL_LENGTH = DASHBOARD_MAX_LABEL_LENGTH
 const DASHBOARD_BUCKETS = new Set(['attention', 'working', 'done', 'idle'])
-const DASHBOARD_DOT_STATES = new Set(['working', 'blocked', 'waiting', 'done', 'idle'])
+const DASHBOARD_DOT_STATES = new Set<unknown>(['working', 'blocked', 'waiting', 'done', 'idle'])
+const DASHBOARD_JOB_LIFECYCLES = new Set<unknown>(AGENT_SUBAGENT_JOB_LIFECYCLES)
 const DASHBOARD_HOST_KINDS = new Set(['local', 'ssh', 'wsl', 'remote'])
 const DASHBOARD_WORKSPACE_KINDS = new Set(['worktree', 'folder'])
 const DASHBOARD_REVIEW_STATES = new Set(['open', 'closed', 'merged', 'draft'])
@@ -202,10 +204,22 @@ function isDashboardSubagents(value: unknown): boolean {
         return false
       }
       const subagent = entry as Record<string, unknown>
+      const job = subagent.job as Record<string, unknown> | undefined
+      if (
+        job !== undefined &&
+        (!job ||
+          typeof job !== 'object' ||
+          Array.isArray(job) ||
+          !isOptionalBoundedString(job.taskId, MAX_ID_LENGTH) ||
+          !isOptionalBoundedString(job.currentStep, MAX_LABEL_LENGTH) ||
+          (job.lifecycle !== undefined && !DASHBOARD_JOB_LIFECYCLES.has(job.lifecycle)))
+      ) {
+        // Why: a bad job must not drop the subagent or card; treat it as absent.
+        delete subagent.job
+      }
       return (
         isBoundedString(subagent.id, MAX_ID_LENGTH) &&
         isBoundedString(subagent.name, MAX_LABEL_LENGTH, true) &&
-        typeof subagent.dotState === 'string' &&
         DASHBOARD_DOT_STATES.has(subagent.dotState)
       )
     })

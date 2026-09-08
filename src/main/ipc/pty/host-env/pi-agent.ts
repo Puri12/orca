@@ -29,6 +29,18 @@ export function resolvePiAgentSourceDir(
     return sourceDir
   }
 
+  if (kind === 'omo') {
+    // Why: Pi's override must not shadow omo's home (no cross-agent fallback).
+    for (const key of [primaryKey, 'SENPI_CODING_AGENT_DIR']) {
+      const value =
+        readEnvWithProcessFallback(baseEnv, key) ?? readSessionShellStartupEnvVar(key, baseEnv)
+      if (value) {
+        return value
+      }
+    }
+    return undefined
+  }
+
   if (kind === 'prime-agent') {
     return (
       readEnvWithProcessFallback(baseEnv, primaryKey) ??
@@ -58,6 +70,10 @@ export function resolveScopedPiAgentSourceDir(
 }
 
 export function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKind): void {
+  if (kind === 'omo') {
+    delete baseEnv.ORCA_OMO_SOURCE_AGENT_DIR
+    return
+  }
   if (kind === 'omp') {
     delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
     delete baseEnv.ORCA_OMP_SOURCE_AGENT_DIR
@@ -89,6 +105,14 @@ export function exposePiManagedExtensionEnv(
       baseEnv.ORCA_OMP_STATUS_EXTENSION = managedEnv.ORCA_OMP_STATUS_EXTENSION
     } else {
       delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    }
+    return
+  }
+  if (kind === 'omo') {
+    if (managedEnv.ORCA_OMO_SOURCE_AGENT_DIR) {
+      baseEnv.ORCA_OMO_SOURCE_AGENT_DIR = managedEnv.ORCA_OMO_SOURCE_AGENT_DIR
+    } else {
+      delete baseEnv.ORCA_OMO_SOURCE_AGENT_DIR
     }
     return
   }

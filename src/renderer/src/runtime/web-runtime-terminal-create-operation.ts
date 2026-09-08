@@ -7,7 +7,11 @@ import type {
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
-import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
+import {
+  agentResumeHostAuthorityCapability,
+  agentStructuredLaunchCapability,
+  legacyLaunchMustOmitAgentIdentity
+} from './agent-resume-host-authority-capability'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
@@ -141,17 +145,21 @@ export async function createWebRuntimeSessionTerminalResult(
                   })) as RuntimeRpcResponse<RuntimeCreateAgentSessionResult>
                 )
               )
-      const resumeHostAuthorityCapability =
-        args.agentSessionKind === 'resume' ? agentResumeHostAuthorityCapability(agent) : undefined
+      // Why: resume uses its resume-path gate; every structured launch also needs the enum-gate probe
+      // so a fresh omo create degrades to legacy on a host that predates omo instead of dying.
+      const structuredLaunchCapability =
+        (args.agentSessionKind === 'resume'
+          ? agentResumeHostAuthorityCapability(agent)
+          : undefined) ?? agentStructuredLaunchCapability(agent)
       const created = await runRemoteAgentSessionLaunch<{
         terminal: CreatedAgentTerminalIdentity
       }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
-        ...(resumeHostAuthorityCapability
-          ? { hostAuthorityCapability: resumeHostAuthorityCapability }
+        ...(structuredLaunchCapability
+          ? { hostAuthorityCapability: structuredLaunchCapability }
           : {}),
-        legacy: async () => {
+        legacy: async ({ hostLacksAgentCapability }) => {
           const response = await callEnvironment({
             method: 'session.tabs.createTerminal',
             params: {
@@ -165,8 +173,15 @@ export async function createWebRuntimeSessionTerminalResult(
               startupCommandDelivery: args.startupCommandDelivery,
               ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
-              ...(args.agent ? { agent: args.agent } : {}),
-              ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
+              // Why: a host predating this agent's enum member rejects the whole create if sent its identity.
+              ...(args.agent &&
+              !(hostLacksAgentCapability && legacyLaunchMustOmitAgentIdentity(args.agent))
+                ? { agent: args.agent }
+                : {}),
+              ...(args.launchAgent &&
+              !(hostLacksAgentCapability && legacyLaunchMustOmitAgentIdentity(args.launchAgent))
+                ? { launchAgent: args.launchAgent }
+                : {}),
               ...(args.viewMode ? { viewMode: args.viewMode } : {}),
               // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.
               activate: false,

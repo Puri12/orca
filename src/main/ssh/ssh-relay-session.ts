@@ -1511,16 +1511,24 @@ export class SshRelaySession {
       return
     }
     try {
-      await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
+      const result = (await mux.request(AGENT_HOOK_INSTALL_PLUGINS_METHOD, {
         opencodePluginSource: openCodeInternals.getOpenCodePluginSource(),
         piExtensionSource: getPiAgentStatusExtensionSource('pi'),
         ompExtensionSource: getPiAgentStatusExtensionSource('omp'),
+        omoExtensionSource: getPiAgentStatusExtensionSource('omo'),
         primeAgentExtensionSource: getPiAgentStatusExtensionSource('prime-agent')
-      })
+      })) as { installed?: { omo?: boolean } } | null
+      if (result?.installed?.omo !== true) {
+        console.warn('[ssh] relay does not support omo status hooks; update the remote Orca server')
+      }
     } catch (err) {
-      // Why: -32601 = older relay without the handler; CONNECTION_LOST/DISPOSED = routine mid-flight teardown — swallow both.
       const code = (err as { code?: unknown })?.code
-      if (code === -32601 || code === 'CONNECTION_LOST' || code === 'DISPOSED') {
+      if (code === -32601) {
+        console.warn('[ssh] relay does not support omo status hooks; update the remote Orca server')
+        return
+      }
+      // Why: connection loss and disposal are routine mid-flight teardown, not unsupported hooks.
+      if (code === 'CONNECTION_LOST' || code === 'DISPOSED') {
         return
       }
       if (mux.isDisposed()) {

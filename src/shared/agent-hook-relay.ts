@@ -45,6 +45,7 @@ const AGENT_HOOK_SOURCES = [
   'cursor',
   'pi',
   'omp',
+  'omo',
   'prime-agent',
   'droid',
   'command-code',
@@ -126,14 +127,21 @@ export const AGENT_HOOK_SHED_FIELDS_KEY = 'shedFields' as const
 const AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX = 'subagents:sha256:'
 
 function subagentRosterDigest(subagents: readonly AgentSubagentSnapshot[]): string {
-  const stableRoster = subagents.map(({ id, state, startedAt, agentType, model, description }) => [
-    id,
-    state,
-    startedAt,
-    agentType ?? null,
-    model ?? null,
-    description ?? null
-  ])
+  // Why: job progress is roster identity; omit it and a shed newer-step envelope restores the cached old step.
+  const includeJob = subagents.some((row) => row.job)
+  const stableRoster = subagents.map(
+    ({ id, state, startedAt, agentType, model, description, job }) => [
+      id,
+      state,
+      startedAt,
+      agentType ?? null,
+      model ?? null,
+      description ?? null,
+      ...(includeJob
+        ? [[job?.taskId ?? null, job?.lifecycle ?? null, job?.currentStep ?? null]]
+        : [])
+    ]
+  )
   return createHash('sha256').update(JSON.stringify(stableRoster)).digest('base64url')
 }
 

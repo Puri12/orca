@@ -66,6 +66,42 @@ describe('mergeNativeChatLiveSession', () => {
     expect(session.status).toBe('ready')
   })
 
+  it('keeps omo working on assistant prose alone (multi-step goals emit milestone prose)', () => {
+    // Why: omo is a goal/mission agent — an assistant milestone between steps is
+    // not turn completion. Only an explicit lifecycle marker may settle it.
+    const session = mergeNativeChatLiveSession({
+      messages: [user('u-1', 'go'), assistant('a-1', 'step 1 done, continuing')],
+      sessionId: 'sess',
+      agent: 'omo',
+      hookState: 'working',
+      stateStartedAt: 1
+    })
+    expect(session.status).toBe('working')
+  })
+
+  it('recovers omp via assistant prose so the omo exemption stays omo-only', () => {
+    const session = mergeNativeChatLiveSession({
+      messages: [user('u-1', 'go'), assistant('a-1', 'step 1 done, continuing')],
+      sessionId: 'sess',
+      agent: 'omp',
+      hookState: 'working',
+      stateStartedAt: 1
+    })
+    expect(session.status).toBe('ready')
+  })
+
+  it('settles omo from an explicit completion marker even with trailing prose', () => {
+    const session = mergeNativeChatLiveSession({
+      messages: [user('u-1', 'go'), assistant('a-1', 'all done')],
+      sessionId: 'sess',
+      agent: 'omo',
+      hookState: 'working',
+      stateStartedAt: 1,
+      transcriptLifecycle: { state: 'completed', turnId: 't-1', timestamp: 3 }
+    })
+    expect(session.status).toBe('ready')
+  })
+
   it('settles a dropped working hook from an explicit completion marker', () => {
     const session = mergeNativeChatLiveSession({
       messages: [user('u-1', 'go'), assistant('a-1', 'done')],

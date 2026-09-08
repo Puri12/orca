@@ -114,6 +114,7 @@ const MAX_WRAPPER_EVIDENCE_SEGMENTS = 8
 const RESERVED_OWNER_IDS: ReadonlyMap<string, TuiAgent> = new Map([
   ['pi', 'pi'],
   ['omp', 'omp'],
+  ['omo', 'omo'],
   ['claude-agent-teams', 'claude-agent-teams'],
   ['qwen-code', 'qwen-code']
 ])

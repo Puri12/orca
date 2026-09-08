@@ -22,7 +22,8 @@ function patchedSubagents(
   return event.subagents.map((subagent) => ({
     id: `${card.paneKey}\u0000subagent:${subagent.id}`,
     name: subagent.description || subagent.agentType || 'unknown',
-    dotState: subagent.state
+    dotState: subagent.state,
+    ...(subagent.job ? { job: subagent.job } : {})
   }))
 }
 

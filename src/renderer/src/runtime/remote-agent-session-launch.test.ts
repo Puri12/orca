@@ -64,6 +64,32 @@ describe('remote agent-session launch routing', () => {
     expect(hostAuthority).not.toHaveBeenCalled()
   })
 
+  it.each([
+    { hostAuthorityCapability: agentResumeHostAuthorityCapability('omo'), expected: true },
+    { hostAuthorityCapability: undefined, expected: false }
+  ])(
+    'reports missing per-agent capability as $expected',
+    async ({ hostAuthorityCapability, expected }) => {
+      const hostAuthority = vi.fn().mockResolvedValue('structured')
+      const legacy = vi.fn().mockResolvedValue('legacy')
+      mocks.supportsCapability.mockResolvedValue(false)
+
+      await expect(
+        runRemoteAgentSessionLaunch({
+          environmentId: 'env-1',
+          hostAuthority,
+          hostAuthorityCapability,
+          legacy
+        })
+      ).resolves.toBe('legacy')
+      expect(legacy).toHaveBeenCalledExactlyOnceWith({
+        skipCompatibilityCheck: true,
+        hostLacksAgentCapability: expected
+      })
+      expect(hostAuthority).not.toHaveBeenCalled()
+    }
+  )
+
   it('preserves the exact legacy path when the capability is absent', async () => {
     const hostAuthority = vi.fn().mockResolvedValue('structured')
     const legacy = vi.fn().mockResolvedValue('legacy')

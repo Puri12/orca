@@ -22,6 +22,17 @@ describe('resolveNativeChatTranscriptAgent', () => {
   })
 })
 
+describe('omo native chat support', () => {
+  it('admits omo with its own transcript tag, distinct from omp', () => {
+    // Why: omo (omo-ai) writes the omp/senpi transcript format, but keeps its own
+    // identity for launch, hooks, and UI — like OpenClaude vs Claude.
+    expect(isNativeChatSupportedAgent('omo')).toBe(true)
+    expect(resolveNativeChatTranscriptAgent('omo')).toBe('omo')
+    expect(nativeChatRequiresLocalTranscript('omo')).toBe(true)
+    expect(shouldStepNativeChatAskAnswer('omo')).toBe(false)
+  })
+})
+
 describe('isNativeChatSupportedAgent', () => {
   it('recognizes the parseable agents and rejects unknown / nullish input', () => {
     expect(isNativeChatSupportedAgent('claude')).toBe(true)

@@ -44,7 +44,8 @@ export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineD
   if (transcriptAgent === 'grok') {
     return decodeGrokTranscriptLine
   }
-  if (transcriptAgent === 'omp') {
+  // Why: omo writes the same senpi transcript format as omp.
+  if (transcriptAgent === 'omp' || transcriptAgent === 'omo') {
     return decodeOmpTranscriptLine
   }
   return null

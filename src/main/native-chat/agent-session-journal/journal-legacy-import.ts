@@ -167,7 +167,8 @@ const TRANSCRIPT_DECODERS = {
   claude: decodeClaudeTranscriptLine,
   codex: decodeCodexTranscriptLine,
   grok: decodeGrokTranscriptLine,
-  omp: decodeOmpTranscriptLine
+  omp: decodeOmpTranscriptLine,
+  omo: decodeOmpTranscriptLine
 } as const
 
 /** Run the real decoder while recording an identity anchor per emitted message,

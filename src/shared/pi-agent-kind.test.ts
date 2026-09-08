@@ -27,6 +27,17 @@ describe('detectPiAgentKindFromCommand', () => {
     expect(detectPiAgentKindFromCommand('prime-agent.cmd')).toBe('prime-agent')
   })
 
+  it('returns "omo" for omo launches and its senpi engine alias', () => {
+    // Why: omo (omo-ai) is a Pi-compatible sibling; its launcher token is `omo` and the
+    // engine shim it spawns is `senpi`. Neither may be swallowed by the `pi` fallback.
+    expect(detectPiAgentKindFromCommand('omo')).toBe('omo')
+    expect(detectPiAgentKindFromCommand('omo --resume')).toBe('omo')
+    expect(detectPiAgentKindFromCommand('/Users/dev/.local/bin/omo')).toBe('omo')
+    expect(detectPiAgentKindFromCommand('senpi')).toBe('omo')
+    expect(detectExplicitPiAgentKindFromCommand('omo')).toBe('omo')
+    expect(detectExplicitPiAgentKindFromCommand('pi')).toBe('pi')
+  })
+
   it('returns "omp" for omp launched via an absolute path', () => {
     expect(detectPiAgentKindFromCommand('/usr/local/bin/omp')).toBe('omp')
     expect(detectPiAgentKindFromCommand('~/bin/omp.sh')).toBe('omp')

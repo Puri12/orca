@@ -16,10 +16,10 @@ function serializeQuestionPrompt(toolInput: unknown): string | undefined {
 }
 
 function isPiCompatibleAskTool(
-  agentKind: 'pi' | 'omp' | 'prime-agent',
+  agentKind: 'pi' | 'omp' | 'omo' | 'prime-agent',
   toolName: string | undefined
 ): boolean {
-  return agentKind === 'omp'
+  return agentKind === 'omp' || agentKind === 'omo'
     ? toolName === 'ask'
     : agentKind === 'pi' && isAskUserQuestionTool(toolName)
 }
@@ -27,7 +27,7 @@ function isPiCompatibleAskTool(
 export function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp' | 'prime-agent'
+  agentKind: 'pi' | 'omp' | 'omo' | 'prime-agent'
 ): ToolSnapshot {
   if (
     eventName === 'tool_call' ||
@@ -41,7 +41,7 @@ export function extractPiToolFields(
     const interactivePrompt =
       isPiCompatibleAskTool(agentKind, toolName) &&
       (eventName === 'tool_call' || eventName === 'tool_execution_start')
-        ? agentKind === 'omp'
+        ? agentKind === 'omp' || agentKind === 'omo'
           ? serializeQuestionPrompt(rawToolInput)
           : deriveInteractivePrompt(toolName, rawToolInput, eventName)
         : undefined
@@ -51,7 +51,7 @@ export function extractPiToolFields(
     )
   }
   if (
-    agentKind === 'omp' &&
+    (agentKind === 'omp' || agentKind === 'omo') &&
     (eventName === 'tool_approval_requested' || eventName === 'tool_approval_resolved')
   ) {
     return toolUpdate(

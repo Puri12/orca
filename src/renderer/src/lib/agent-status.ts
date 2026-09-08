@@ -107,6 +107,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   'mimo-code': true,
   pi: true,
   omp: true,
+  omo: true,
   'prime-agent': true,
   gemini: true,
   antigravity: true,

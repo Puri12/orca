@@ -260,6 +260,50 @@ describe('shared agent-hook-listener', () => {
     expect(working?.payload.interactivePrompt).toBeUndefined()
   })
 
+  it('carries omo background job roster (subagents + job metadata) through normalization', () => {
+    // Why: omo's dashboard rows come from the hook roster; dropping it here would
+    // leave the dashboard blind to background jobs even though the type allows them.
+    const normalized = normalizeHookPayload(
+      state,
+      'omo',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_execution_start',
+          tool_name: 'task',
+          subagents: [
+            {
+              id: 'job-a',
+              agentType: 'omo',
+              description: 'research lane A',
+              state: 'working',
+              startedAt: 100,
+              job: { taskId: 'task-a', lifecycle: 'running', currentStep: 'reading src/shared' }
+            },
+            { id: 'job-b', description: 'lane B', state: 'idle', startedAt: 90 }
+          ]
+        }
+      },
+      'production'
+    )
+    expect(normalized?.payload).toMatchObject({ state: 'working', agentType: 'omo' })
+    expect(normalized?.payload.subagents).toEqual([
+      {
+        id: 'job-a',
+        agentType: 'omo',
+        description: 'research lane A',
+        state: 'working',
+        startedAt: 100,
+        job: { taskId: 'task-a', lifecycle: 'running', currentStep: 'reading src/shared' }
+      },
+      { id: 'job-b', description: 'lane B', state: 'idle', startedAt: 90 }
+    ])
+  })
+
   it('normalizes OMP Pi-compatible hooks with OMP attribution', () => {
     const event = normalizeHookPayload(
       state,

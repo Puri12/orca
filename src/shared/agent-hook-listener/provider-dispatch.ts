@@ -94,6 +94,7 @@ export function normalizeProviderEvent(input: {
       break
     case 'pi':
     case 'omp':
+    case 'omo':
     case 'prime-agent':
       payload = normalizePiCompatibleEvent(
         state,

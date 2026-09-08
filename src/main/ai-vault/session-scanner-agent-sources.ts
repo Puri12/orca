@@ -33,6 +33,13 @@ const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
   process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
   '.pi'
 )
+// Why: omo's own env names only — PI_CODING_AGENT_DIR would alias Pi's root and shadow its sessions.
+const OMO_SESSIONS_DIR = normalizeAgentSessionsDir(
+  process.env.OMO_CODING_AGENT_DIR?.trim() ||
+    process.env.SENPI_CODING_AGENT_DIR?.trim() ||
+    join(homedir(), '.omo', 'agent', 'sessions'),
+  '.omo'
+)
 // Why: Prime Agent brands Pi's env contract with its own prefix and adds a
 // dedicated sessions-root override, so resolution differs from Pi/OMP in shape
 // as well as in variable name.
@@ -191,6 +198,15 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // own picker only globs `*/*.jsonl`, so it never offers them either.
     // Depth 0 is the workspace dir, which is never an artifact dir.
     directoryPredicate: (name, depth) => depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name)
+  },
+  omo: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(options.omoSessionsDir ?? OMO_SESSIONS_DIR, wslHomeDirs, [
+        '.omo',
+        'agent',
+        'sessions'
+      ]),
+    extensions: ['.jsonl']
   },
   'prime-agent': {
     rootDirs: (options, wslHomeDirs) =>

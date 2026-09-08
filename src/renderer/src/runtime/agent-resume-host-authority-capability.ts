@@ -2,6 +2,7 @@ import type { ResumableTuiAgent } from '../../../shared/agent-session-resume'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OMO_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   type RuntimeCapability
 } from '../../../shared/protocol-version'
@@ -30,8 +31,30 @@ const RESUME_HOST_AUTHORITY_CAPABILITY_BY_AGENT = {
   // Ungated to match how main shipped copilot resume; gating it is its own change.
   copilot: undefined,
   omp: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  omo: AGENT_SESSION_OMO_RESUME_RUNTIME_CAPABILITY,
   kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
 } satisfies Record<ResumableTuiAgent, RuntimeCapability | undefined>
+
+// Why: omp and kimi were TuiAgent members before their resume gates existed, so a host lacking
+// the gate still parses their launchAgent/agent. omo entered TuiAgent together with its gate, so
+// the same host rejects its identity (isTuiAgent) and the legacy launch must carry only the command.
+const IDENTITY_SHIPPED_WITH_CAPABILITY: ReadonlySet<TuiAgent> = new Set<TuiAgent>(['omo'])
+
+export function legacyLaunchMustOmitAgentIdentity(agent: TuiAgent | null | undefined): boolean {
+  return agent != null && IDENTITY_SHIPPED_WITH_CAPABILITY.has(agent)
+}
+
+// Why: any structured launch (fresh OR resume) of an agent whose identity entered TuiAgent WITH its
+// capability gate is rejected by a pre-omo host's isTuiAgent with invalid_argument — not a fallback
+// code — so the per-agent probe, not the error handler, must select the legacy path. Resume also has
+// its own resume-path gate (kimi/omp); this covers the fresh createAgentSession hole.
+export function agentStructuredLaunchCapability(
+  agent: TuiAgent | null | undefined
+): RuntimeCapability | undefined {
+  return agent != null && IDENTITY_SHIPPED_WITH_CAPABILITY.has(agent)
+    ? AGENT_SESSION_OMO_RESUME_RUNTIME_CAPABILITY
+    : undefined
+}
 
 export function agentResumeHostAuthorityCapability(
   agent: TuiAgent | null | undefined

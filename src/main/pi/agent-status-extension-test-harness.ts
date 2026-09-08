@@ -56,7 +56,7 @@ const BASE_ENV = {
 export const AGENT_STATUS_EXTENSION_SELF_PID = 4242
 
 export function createAgentStatusExtensionHarness(args: {
-  kind: 'pi' | 'omp' | 'prime-agent'
+  kind: 'pi' | 'omp' | 'omo' | 'prime-agent'
   env?: Record<string, string | undefined>
   pid?: number
   title?: string

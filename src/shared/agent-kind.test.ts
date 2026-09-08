@@ -29,6 +29,12 @@ describe('tuiAgentToAgentKind', () => {
     expect(tuiAgentToAgentKind('claude')).toBe('claude-code')
     expect(tuiAgentToAgentKind('pi')).toBe('pi')
   })
+
+  it('maps omo to its own telemetry kind, distinct from pi and omp', () => {
+    expect(tuiAgentToAgentKind('omo')).toBe('omo')
+    expect(agentKindSchema.safeParse('omo').success).toBe(true)
+    expect(agentKindToTuiAgent('omo')).toBe('omo')
+  })
 })
 
 describe('agentKindToTuiAgent', () => {

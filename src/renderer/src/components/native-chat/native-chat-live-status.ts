@@ -63,6 +63,7 @@ export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): Nat
   }
 
   const status = liveStatusOverride(
+    agent,
     hookState,
     statusTailMessage ?? messages.at(-1),
     stateStartedAt,
@@ -88,6 +89,7 @@ export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): Nat
 export const LIFECYCLE_CLOCK_SKEW_SLACK_MS = 2_000
 
 function liveStatusOverride(
+  agent: AgentType,
   hookState: AgentStatusState | null,
   statusTailMessage: NativeChatMessage | undefined,
   stateStartedAt: number | null | undefined,
@@ -114,12 +116,9 @@ function liveStatusOverride(
   if (terminatesCurrentTurn) {
     return undefined
   }
-  // Why: prose recovery stays available whenever the latest lifecycle is not an
-  // explicit in-progress generation. That covers incapable hosts and capable
-  // hosts whose transcript never emitted a terminal marker for this window.
-  // Mid-turn (lifecycle === working) keeps prose off so partial assistant rows
-  // do not settle early on capable providers.
+  // Why: omo is a goal agent whose assistant milestones between steps are not turn completion.
   if (
+    agent !== 'omo' &&
     transcriptLifecycle?.state !== 'working' &&
     trailingAssistantPostDates(statusTailMessage, stateStartedAt)
   ) {

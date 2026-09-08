@@ -44,6 +44,84 @@ function snapshot(cards: DashboardCard[] = [card()]): DashboardSnapshot {
 }
 
 describe('patchDashboardSnapshotFromAgentStatus', () => {
+  it('live-patches omo background job rows with job metadata without a full rebuild', () => {
+    const original = snapshot([card({ agentType: 'omo', bucket: 'working', dotState: 'working' })])
+    const result = patchDashboardSnapshotFromAgentStatus(
+      original,
+      event({
+        state: 'working',
+        prompt: undefined,
+        interactivePrompt: undefined,
+        agentType: 'omo',
+        subagents: [
+          {
+            id: 'job-a',
+            agentType: 'omo',
+            description: 'research lane A',
+            state: 'working',
+            startedAt: 260,
+            job: { taskId: 'task-a', lifecycle: 'running', currentStep: 'reading src/shared' }
+          },
+          {
+            id: 'job-b',
+            agentType: 'omo',
+            description: 'research lane B',
+            state: 'idle',
+            startedAt: 255,
+            job: { taskId: 'task-b', lifecycle: 'succeeded' }
+          }
+        ]
+      })
+    )
+
+    expect(result.matched).toBe(true)
+    // Why: the patch path (not a rebuild) must surface job rows live.
+    expect(result.snapshot.cards[0].subagents).toEqual([
+      expect.objectContaining({
+        id: 'tab-1:leaf-1\u0000subagent:job-a',
+        name: 'research lane A',
+        dotState: 'working',
+        job: { taskId: 'task-a', lifecycle: 'running', currentStep: 'reading src/shared' }
+      }),
+      expect.objectContaining({
+        id: 'tab-1:leaf-1\u0000subagent:job-b',
+        name: 'research lane B',
+        dotState: 'idle',
+        job: { taskId: 'task-b', lifecycle: 'succeeded' }
+      })
+    ])
+  })
+
+  it('drops job metadata when a later ping omits it for the same subagent', () => {
+    const original = snapshot([
+      card({
+        agentType: 'omo',
+        subagents: [
+          {
+            id: 'tab-1:leaf-1\u0000subagent:job-a',
+            name: 'research lane A',
+            dotState: 'working',
+            job: { taskId: 'task-a', lifecycle: 'running' }
+          }
+        ]
+      })
+    ])
+    const result = patchDashboardSnapshotFromAgentStatus(
+      original,
+      event({
+        state: 'working',
+        prompt: undefined,
+        interactivePrompt: undefined,
+        subagents: [{ id: 'job-a', description: 'research lane A', state: 'idle', startedAt: 260 }]
+      })
+    )
+    expect(result.snapshot.cards[0].subagents?.[0]).toEqual({
+      id: 'tab-1:leaf-1\u0000subagent:job-a',
+      name: 'research lane A',
+      dotState: 'idle'
+    })
+  })
+
   it('patches one known card without rebuilding the dashboard topology', () => {
     const original = snapshot([card(), card({ paneKey: 'tab-2:leaf-2' })])
     const result = patchDashboardSnapshotFromAgentStatus(original, event())

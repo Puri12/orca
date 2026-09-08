@@ -128,6 +128,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://omp.sh'
   },
   {
+    id: 'omo',
+    label: translate('auto.lib.agent.catalog.20f4d5938b', 'omo'),
+    cmd: 'omo',
+    homepageUrl: 'https://github.com/code-yeongyu/oh-my-openagent'
+  },
+  {
     id: 'prime-agent',
     label: translate('auto.lib.agent.catalog.d443a47995', 'Prime Agent'),
     cmd: 'prime-agent',

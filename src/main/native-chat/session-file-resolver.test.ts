@@ -521,6 +521,30 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 
+  it('matches omo transcripts by session id suffix inside the per-cwd directory', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-omo-')
+    const omoSessionsDir = join(root, 'omo-sessions')
+    const ompSessionsDir = join(root, 'omp-sessions-should-not-be-used')
+    const cwdDir = join(omoSessionsDir, '-Users-ada-repo')
+    await mkdir(cwdDir, { recursive: true })
+    await mkdir(join(ompSessionsDir, '-Users-ada-repo'), { recursive: true })
+    const target = join(cwdDir, '2026-07-16T00-27-02-222Z_sess-omo-1.jsonl')
+    const ompDecoy = join(
+      ompSessionsDir,
+      '-Users-ada-repo',
+      '2026-07-16T00-27-02-222Z_sess-omo-1.jsonl'
+    )
+    await writeFile(target, '{}\n')
+    await writeFile(ompDecoy, '{}\n')
+
+    const resolved = await resolveSessionFilePath('omo', 'sess-omo-1', {
+      omoSessionsDir,
+      ompSessionsDir
+    })
+    expect(resolved).toBe(target)
+    expect(resolved).not.toBe(ompDecoy)
+  })
+
   it('never descends into an omp session artifact dir', async () => {
     // Why: a session's task-subagent transcripts sit in its same-named
     // `<stamp>_<uuid>/` artifact dir, and a label-named child CAN end in

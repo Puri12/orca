@@ -20,7 +20,11 @@ import type {
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
 import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { agentResumeHostAuthorityCapability } from '../../runtime/agent-resume-host-authority-capability'
+import {
+  agentResumeHostAuthorityCapability,
+  agentStructuredLaunchCapability,
+  legacyLaunchMustOmitAgentIdentity
+} from '../../runtime/agent-resume-host-authority-capability'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
@@ -2221,7 +2225,6 @@ export function createRemoteRuntimePtyTransport(
             ? { resumeProviderSession: resumeProviderSessionToSend }
             : {}),
           ...(launchTokenToSend !== undefined ? { launchToken: launchTokenToSend } : {}),
-          ...(launchAgentToSend !== undefined ? { launchAgent: launchAgentToSend } : {}),
           ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
           tabId,
           leafId,
@@ -2230,7 +2233,7 @@ export function createRemoteRuntimePtyTransport(
           presentation: 'background' as const,
           ...(activate === true ? { activate: true } : {})
         }
-        const legacyCreate = () =>
+        const legacyCreate = ({ hostLacksAgentCapability = false } = {}) =>
           createWithUnknownOutcomeRecovery(
             'terminal',
             (timeoutMs, reconcileExisting) =>
@@ -2239,6 +2242,13 @@ export function createRemoteRuntimePtyTransport(
                 'terminal.create',
                 {
                   ...legacyCreateParams,
+                  // Why: a host predating this agent's enum member rejects the whole create if sent its identity.
+                  ...(launchAgentToSend !== undefined &&
+                  !(
+                    hostLacksAgentCapability && legacyLaunchMustOmitAgentIdentity(launchAgentToSend)
+                  )
+                    ? { launchAgent: launchAgentToSend }
+                    : {}),
                   ...(reconcileExisting ? { reconcileExisting: true } : {})
                 },
                 timeoutMs
@@ -2296,17 +2306,20 @@ export function createRemoteRuntimePtyTransport(
             createEnvironmentId,
             connectLifecycleEpoch
           )
-        const resumeHostAuthorityCapability = resumeProviderSessionToSend
-          ? agentResumeHostAuthorityCapability(launchAgentToSend)
-          : undefined
+        // Why: resume uses its resume-path gate; every structured launch also needs the enum-gate
+        // probe so a fresh omo create degrades to legacy on a host that predates omo.
+        const structuredLaunchCapability =
+          (resumeProviderSessionToSend
+            ? agentResumeHostAuthorityCapability(launchAgentToSend)
+            : undefined) ?? agentStructuredLaunchCapability(launchAgentToSend)
         const created = launchAgentToSend
           ? agentSessionRequiresHostAuthorityReplay
             ? await hostAuthorityCreate()
             : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
                 environmentId: createEnvironmentId,
                 hostAuthority: hostAuthorityCreate,
-                ...(resumeHostAuthorityCapability
-                  ? { hostAuthorityCapability: resumeHostAuthorityCapability }
+                ...(structuredLaunchCapability
+                  ? { hostAuthorityCapability: structuredLaunchCapability }
                   : {}),
                 legacy: legacyCreate
               })
