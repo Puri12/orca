@@ -12698,7 +12698,8 @@
             "fc3095d2ed": "explorer",
             "aiVaultSessionHistory": "Agents",
             "folderWorkspaces": "Attached worktrees",
-            "parentPrChecks": "PR Checks"
+            "parentPrChecks": "PR Checks",
+            "liveAgents": "Live Agents"
           },
           "right": {
             "panel": {
@@ -13303,6 +13304,28 @@
             "90cabf6cfc": "Stack this PR above #{{value0}}",
             "ff81473a57": "Creates a GitHub Stack or extends the parent's existing stack.",
             "29732f2fb0": "new PR"
+          },
+          "liveAgents": {
+            "jumpToPane": "Jump to agent pane",
+            "hideDetail": "Hide current work",
+            "showDetail": "Show current work",
+            "noActivity": "No current activity reported",
+            "dependsOn": "depends on {{value0}}",
+            "title": "Live agents",
+            "empty": "No agents are reporting in this workspace",
+            "detail": {
+              "step": "Step",
+              "tool": "Tool",
+              "toolOutput": "Tool output",
+              "message": "Latest message",
+              "turns": "Turns",
+              "tools": "Tool calls",
+              "tokensPerSecond": "Tok/s",
+              "runtime": "Runtime",
+              "model": "Model",
+              "state": "State",
+              "elapsed": "Elapsed"
+            }
           }
         }
       },

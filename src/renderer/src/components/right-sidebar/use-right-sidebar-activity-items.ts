@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
+import { Plug, Files, GitBranch, ListChecks, Radio, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -34,6 +34,7 @@ export function useRightSidebarActivityItems({
   const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
+  const agentsShortcut = useShortcutLabel('sidebar.agents.toggle')
   const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
   // Why: source control and checks are meaningless for non-git folders.
   // Hide those tabs so the activity bar only shows relevant actions.
@@ -72,6 +73,12 @@ export function useRightSidebarActivityItems({
         icon: AgentSessionHistoryIcon,
         title: translate('auto.components.right.sidebar.index.aiVaultSessionHistory', 'Agents'),
         shortcut: ''
+      },
+      {
+        id: 'agents',
+        icon: Radio,
+        title: translate('auto.components.right.sidebar.index.liveAgents', 'Live Agents'),
+        shortcut: agentsShortcut === 'Unassigned' ? '' : agentsShortcut
       },
       {
         id: 'workspaces',
@@ -116,6 +123,7 @@ export function useRightSidebarActivityItems({
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)
     ],
     [
+      agentsShortcut,
       checksShortcut,
       explorerShortcut,
       pluginPanelErrors,

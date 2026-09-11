@@ -238,6 +238,14 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     }
   },
   {
+    id: 'sidebar.agents.toggle',
+    title: 'Show Live Agents',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'sidebar', 'agents', 'omo', 'subagents', 'dag'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'sidebar.sleepingWorkspaces.toggle',
     title: 'Toggle Sleeping Workspaces',
     group: 'Global',
