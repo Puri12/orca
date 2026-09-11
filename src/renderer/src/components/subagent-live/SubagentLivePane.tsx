@@ -1,119 +1,13 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDownToLine, Radio } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import {
-  useSubagentTranscriptStream,
-  type SequencedSubagentTranscriptEvent
-} from './use-subagent-transcript-stream'
+import { groupSubagentLiveRows } from './subagent-live-rows'
+import { SubagentLiveMessage } from './SubagentLiveMessage'
+import { useSubagentTranscriptStream } from './use-subagent-transcript-stream'
 
 const FOLLOW_TAIL_SLACK_PX = 24
-
-type LineTone = 'user' | 'assistant' | 'tool' | 'tool-error' | 'meta'
-
-const TONE_CLASS: Record<LineTone, string> = {
-  user: 'text-foreground',
-  assistant: 'text-foreground/90',
-  tool: 'text-muted-foreground',
-  'tool-error': 'text-destructive',
-  meta: 'text-muted-foreground/70'
-}
-
-const TAG_CLASS: Record<LineTone, string> = {
-  user: 'text-primary',
-  assistant: 'text-foreground/60',
-  tool: 'text-muted-foreground/80',
-  'tool-error': 'text-destructive',
-  meta: 'text-muted-foreground/50'
-}
-
-function TranscriptLine({
-  tag,
-  tone,
-  children,
-  kind
-}: {
-  tag: string
-  tone: LineTone
-  kind: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <div
-      data-subagent-live-line={kind}
-      className={cn('flex min-w-0 gap-2 px-3 py-0.5 leading-5', TONE_CLASS[tone])}
-    >
-      <span
-        className={cn(
-          'w-14 shrink-0 select-none text-right text-[10px] uppercase tracking-wider',
-          TAG_CLASS[tone]
-        )}
-        aria-hidden
-      >
-        {tag}
-      </span>
-      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{children}</span>
-    </div>
-  )
-}
-
-function renderEvent({ seq, event }: SequencedSubagentTranscriptEvent): React.ReactNode {
-  switch (event.kind) {
-    case 'session':
-      return (
-        <TranscriptLine key={seq} kind="session" tag="session" tone="meta">
-          {event.sessionId}
-          {event.cwd ? ` · ${event.cwd}` : ''}
-        </TranscriptLine>
-      )
-    case 'model-change':
-      return (
-        <TranscriptLine key={seq} kind="model-change" tag="model" tone="meta">
-          {event.provider}/{event.modelId}
-        </TranscriptLine>
-      )
-    case 'user':
-      return (
-        <TranscriptLine key={seq} kind="user" tag="user" tone="user">
-          {event.text}
-        </TranscriptLine>
-      )
-    case 'assistant':
-      return (
-        <React.Fragment key={seq}>
-          {event.text || event.stopReason ? (
-            <TranscriptLine kind="assistant" tag="agent" tone="assistant">
-              {event.text}
-              {event.stopReason ? (
-                <span className="ml-2 text-destructive">[{event.stopReason}]</span>
-              ) : null}
-            </TranscriptLine>
-          ) : null}
-          {event.toolCalls.map((call, callIndex) => (
-            <TranscriptLine key={`${seq}-${callIndex}`} kind="tool-call" tag="tool" tone="tool">
-              <span className="text-foreground/80">{call.name}</span>
-              {call.input ? ` ${call.input}` : ''}
-            </TranscriptLine>
-          ))}
-        </React.Fragment>
-      )
-    case 'tool-result':
-      return (
-        <TranscriptLine
-          key={seq}
-          kind="tool-result"
-          tag={event.isError ? 'error' : 'result'}
-          tone={event.isError ? 'tool-error' : 'tool'}
-        >
-          <span className="text-foreground/80">{event.toolName}</span>
-          {event.output ? ` ${event.output}` : ''}
-        </TranscriptLine>
-      )
-    default:
-      return null
-  }
-}
 
 function useFollowTail(
   scrollRef: React.RefObject<HTMLDivElement | null>,
@@ -168,7 +62,8 @@ function EmptyState({ title, detail }: { title: string; detail?: string }): Reac
   )
 }
 
-/** Terminal-like live log of one omo child's senpi transcript, auto-following the tail. */
+/** Live chat view of one omo child's senpi transcript, laid out like native chat and
+ *  auto-following the tail. */
 export function SubagentLivePane({
   worktreeCwd,
   taskId,
@@ -181,6 +76,7 @@ export function SubagentLivePane({
   const stream = useSubagentTranscriptStream(worktreeCwd, taskId)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const { following, jumpToTail } = useFollowTail(scrollRef, stream.events.length)
+  const rows = useMemo(() => groupSubagentLiveRows(stream.events), [stream.events])
   const statusLabel =
     stream.phase === 'live'
       ? translate('auto.components.subagentLive.status.live', 'Live')
@@ -194,9 +90,9 @@ export function SubagentLivePane({
     <div
       data-subagent-live-pane={taskId}
       data-subagent-live-phase={stream.phase}
-      className="flex h-full min-h-0 w-full flex-col bg-editor-surface font-mono text-xs"
+      className="flex h-full min-h-0 w-full flex-col bg-background text-sm"
     >
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-3">
+      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border px-3 text-xs">
         <span
           className={cn(
             'size-1.5 shrink-0 rounded-full',
@@ -207,7 +103,7 @@ export function SubagentLivePane({
         <span className="min-w-0 truncate text-foreground/90" title={label}>
           {label}
         </span>
-        <span className="truncate text-[10px] uppercase tracking-wider text-muted-foreground/70">
+        <span className="truncate font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
           {taskId}
         </span>
         <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -238,9 +134,14 @@ export function SubagentLivePane({
           <div
             ref={scrollRef}
             data-subagent-live-log
-            className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto py-2"
+            className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-4"
           >
-            {stream.events.map(renderEvent)}
+            {/* Same column and row rhythm as NativeChatMessageList. */}
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+              {rows.map((row) => (
+                <SubagentLiveMessage key={row.seq} row={row} />
+              ))}
+            </div>
           </div>
         )}
         {!following ? (

@@ -37,6 +37,21 @@ function fixtureEvents(): SubagentTranscriptEvent[] {
       toolCalls: [
         {
           name: 'eval',
+          input: 'console.log("S1-boot");',
+          detail:
+            '{\n  "action": "run",\n  "language": "js",\n  "code": "console.log(\\"S1-boot\\");\\n",\n  "summary": "Say S1-boot as first step of slow demo narration"\n}'
+        }
+      ],
+      stopReason: null,
+      timestamp
+    },
+    { kind: 'tool-result', toolName: 'eval', output: 'S1-boot', isError: false, timestamp },
+    {
+      kind: 'assistant',
+      text: '',
+      toolCalls: [
+        {
+          name: 'eval',
           input: 'tool.bash({ command: "sleep 4 && echo s2-tool-ok" })',
           detail: null
         }
@@ -111,6 +126,12 @@ function lineTexts(host: HTMLElement, kind: string): string[] {
   )
 }
 
+function roles(host: HTMLElement): string[] {
+  return [...host.querySelectorAll<HTMLElement>('[data-subagent-live-role]')].map(
+    (row) => row.getAttribute('data-subagent-live-role') ?? ''
+  )
+}
+
 beforeEach(() => {
   subscribeCalls.length = 0
   installSubagentTranscriptApi()
@@ -145,19 +166,45 @@ describe('SubagentLivePane', () => {
       line.getAttribute('data-subagent-live-line')
     )
     // Why: the last fixture turn is the only one with real output; its order is the contract.
-    expect(kinds.slice(-6)).toEqual([
+    expect(kinds.slice(-8)).toEqual([
       'user',
       'assistant',
+      'tool-call',
+      'tool-result',
       'tool-call',
       'tool-result',
       'assistant',
       'assistant'
     ])
+    // Why: the log is a conversation — user and assistant rows carry a role, tool rows nest inside.
+    expect(roles(host)).toEqual(['user', 'assistant', 'assistant', 'assistant', 'assistant'])
+    const userRow = host.querySelector('[data-subagent-live-role="user"]')
+    expect(userRow?.textContent).toContain('say s1-start')
+    expect(userRow?.querySelector('[data-subagent-live-line="user"]')).not.toBeNull()
     expect(lineTexts(host, 'assistant').at(-1)).toContain('s3-end')
-    expect(lineTexts(host, 'tool-call')[0]).toContain('eval')
-    expect(lineTexts(host, 'tool-call')[0]).toContain('sleep 4 && echo s2-tool-ok')
-    expect(lineTexts(host, 'tool-result')[0]).toContain('eval run requires language')
-    expect(lineTexts(host, 'model-change')).toContain('modelxai/grok-4.20-0309-non-reasoning')
+    expect(host.querySelector('[data-subagent-live-log]')?.className).not.toMatch(/font-mono/)
+
+    // Why: a tool call is a `▸ name  preview` row with the humanized label, never raw JSON.
+    const toolCalls = host.querySelectorAll<HTMLElement>('[data-subagent-live-line="tool-call"]')
+    expect(toolCalls[0].querySelector('button[aria-expanded]')).not.toBeNull()
+    expect(toolCalls[0].querySelector('svg')).not.toBeNull()
+    expect(toolCalls[0].textContent).toContain('eval')
+    expect(toolCalls[0].textContent).toContain('console.log("S1-boot");')
+    expect(toolCalls[0].textContent).not.toContain('{"')
+    expect(toolCalls[1].textContent).toContain('sleep 4 && echo s2-tool-ok')
+    expect(host.querySelector('[data-subagent-live-log]')?.textContent).not.toContain('{"')
+
+    // Why: the eval result shows the unwrapped text, and an error result reads as destructive.
+    const results = lineTexts(host, 'tool-result')
+    expect(results[0]).toContain('S1-boot')
+    expect(results[0]).not.toContain('{"text"')
+    expect(results[1]).toContain('eval run requires language')
+    expect(
+      host
+        .querySelectorAll<HTMLElement>('[data-subagent-live-line="tool-result"]')[1]
+        .querySelector('.text-destructive')
+    ).not.toBeNull()
+    expect(lineTexts(host, 'model-change')[0]).toContain('xai/grok-4.20-0309-non-reasoning')
 
     act(() => {
       subscribeCalls[0].push({
@@ -191,7 +238,8 @@ describe('SubagentLivePane', () => {
       })
     })
     expect(pane?.getAttribute('data-subagent-live-phase')).toBe('live')
-    expect(lineTexts(host, 'user')).toEqual(['userlate prompt'])
+    expect(lineTexts(host, 'user')).toEqual(['late prompt'])
+    expect(roles(host)).toEqual(['user'])
   })
 
   it('unsubscribes on unmount and resubscribes when the binding changes', async () => {

@@ -11822,7 +11822,15 @@
         "error": {
           "title": "Could not read the subagent transcript"
         },
-        "followTail": "Follow"
+        "followTail": "Follow",
+        "turn": {
+          "aborted": "Turn aborted",
+          "error": "Turn ended with an error"
+        },
+        "meta": {
+          "session": "Session",
+          "model": "Model"
+        }
       },
       "right": {
         "sidebar": {

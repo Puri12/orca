@@ -19,7 +19,8 @@ import {
   countToolCalls,
   createToolInputDisplay,
   summarizeToolRun,
-  truncateToolDetail
+  truncateToolDetail,
+  type ToolInputDisplay
 } from './native-chat-tool-summary'
 import {
   NATIVE_CHAT_TOOL_ACTIVITY_COPY,
@@ -33,13 +34,17 @@ import { nativeChatToolActivityLabel } from './native-chat-tool-activity-label'
 /** A single inline tool line — `▸ ToolName  preview` — that expands in place to
  *  show the call's diff/input or the result's body. Tool calls read as flat
  *  lines in the conversation rather than boxed blocks (mobile parity). Lines only
- *  mount while the parent run is open and are individually collapsible. */
-function ToolLine({
+ *  mount while the parent run is open and are individually collapsible.
+ *  `inputDisplay` lets a caller whose label was already humanized upstream (the
+ *  Subagent-Live transcript) keep it instead of re-deriving one from `input`. */
+export function NativeChatToolLine({
   block,
-  initiallyExpanded = true
+  initiallyExpanded = true,
+  inputDisplay
 }: {
   block: NativeChatBlock
   initiallyExpanded?: boolean
+  inputDisplay?: Pick<ToolInputDisplay, 'label' | 'hasDetail' | 'formatDetail'>
 }): React.JSX.Element | null {
   const [expanded, setExpanded] = useState(initiallyExpanded)
 
@@ -53,11 +58,11 @@ function ToolLine({
 
   if (isCall) {
     name = block.name
-    const inputDisplay = createToolInputDisplay(block.input)
-    preview = inputDisplay.label
-    inputHasDetail = inputDisplay.hasDetail
+    const display = inputDisplay ?? createToolInputDisplay(block.input)
+    preview = display.label
+    inputHasDetail = display.hasDetail
     diff = expanded ? diffFromToolCall(block.name, block.input) : null
-    detail = expanded && !diff ? inputDisplay.formatDetail() : null
+    detail = expanded && !diff ? display.formatDetail() : null
   } else if (isToolResultBlock(block)) {
     name = translate('components.native-chat.tool.result', 'Result')
     preview = block.output.split('\n')[0]?.slice(0, 80) ?? ''
@@ -319,7 +324,7 @@ export function NativeChatToolRun({
               const occurrence = seen.get(signature) ?? 0
               seen.set(signature, occurrence + 1)
               return (
-                <ToolLine
+                <NativeChatToolLine
                   key={`${signature}:${occurrence}`}
                   block={block}
                   initiallyExpanded={expandToolLines}

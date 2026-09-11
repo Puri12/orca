@@ -6,5 +6,6 @@ export {
   summarizeToolInput,
   summarizeToolRun,
   toolFilePath,
-  truncateToolDetail
+  truncateToolDetail,
+  type ToolInputDisplay
 } from '../../../../shared/native-chat-tool-summary'
