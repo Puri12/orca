@@ -35,12 +35,14 @@ function WaveGroup({
   wave,
   now,
   onJump,
-  onOpenSubagentLive
+  onOpenSubagentLive,
+  sessionCwd
 }: {
   wave: LiveAgentWave
   now: number
   onJump: () => void
   onOpenSubagentLive?: OpenSubagentLive
+  sessionCwd: string | null
 }) {
   return (
     <div
@@ -61,6 +63,7 @@ function WaveGroup({
             now={now}
             onJump={onJump}
             onOpenSubagentLive={onOpenSubagentLive}
+            sessionCwd={sessionCwd}
           />
         ))}
       </div>
@@ -115,6 +118,7 @@ function AgentSection({
               now={now}
               onJump={jumpToRoot}
               onOpenSubagentLive={onOpenSubagentLive}
+              sessionCwd={root.entry.sessionCwd ?? null}
             />
           ))}
         </div>
@@ -151,22 +155,20 @@ export default function LiveAgentsPanel(): React.JSX.Element {
     },
     [worktreeId]
   )
-  // Why: prefer hook-reported sessionCwd (omo real cwd for transcripts); fallback to worktree path for older builds. The agent status entry for the pane is already read in that panel (reuse for jobGraph/subagents).
-  const worktreeCwd = useAppStore((state) => {
-    if (!worktreeId) {
-      return null
-    }
-    const entry = Object.values(state.agentStatusByPaneKey).find(
-      (e) => e.worktreeId === worktreeId || e.paneKey.includes(worktreeId)
-    )
-    return entry?.sessionCwd ?? state.getKnownWorktreeById(worktreeId)?.path ?? null
-  })
-  const onOpenSubagentLive = useMemo<OpenSubagentLive | undefined>(
-    () =>
-      worktreeCwd
-        ? (taskId, label) => openSubagentLiveInFloatingWorkspace({ worktreeCwd, taskId, label })
-        : undefined,
-    [worktreeCwd]
+  // Why: each subagent row carries its own parent session's cwd (omo may run from a
+  // subdirectory, and one worktree can host several omo panes); the worktree path is
+  // only a last resort for older hook builds that never reported sessionCwd.
+  const worktreeFallbackPath = useAppStore((state) =>
+    worktreeId ? (state.getKnownWorktreeById(worktreeId)?.path ?? null) : null
+  )
+  const onOpenSubagentLive = useCallback<OpenSubagentLive>(
+    (taskId, label, sessionCwd) => {
+      const worktreeCwd = sessionCwd ?? worktreeFallbackPath
+      if (worktreeCwd) {
+        openSubagentLiveInFloatingWorkspace({ worktreeCwd, taskId, label })
+      }
+    },
+    [worktreeFallbackPath]
   )
 
   if (!worktreeId) {
@@ -212,7 +214,13 @@ export default function LiveAgentsPanel(): React.JSX.Element {
             section={section}
             now={now}
             onActivate={onActivate}
-            onOpenSubagentLive={onOpenSubagentLive}
+            // Why: every row in a section runs inside the root session, so with no cwd
+            // resolvable for the root there is no transcript any of its rows could tail.
+            onOpenSubagentLive={
+              (section.root.entry.sessionCwd ?? worktreeFallbackPath) !== null
+                ? onOpenSubagentLive
+                : undefined
+            }
             focusedPaneKey={focusedPaneKey}
           />
         ))

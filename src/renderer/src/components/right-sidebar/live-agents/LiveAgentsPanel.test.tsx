@@ -445,6 +445,61 @@ describe('LiveAgentsPanel', () => {
     })
   })
 
+  it('opens a subagent live view against its own parent session cwd, not another pane in the workspace', () => {
+    // Why: two omo panes in one worktree, launched from different subdirectories, write
+    // their child transcripts under different cwds; the clicked row must resolve its own.
+    const PANE_KEY_B = `${TAB_ID}:22222222-2222-4222-8222-222222222222`
+    const entryA = makeEntry({ sessionCwd: `${WORKTREE_PATH}/subA` })
+    const entryB = makeEntry({
+      paneKey: PANE_KEY_B,
+      prompt: 'Write docs',
+      sessionCwd: `${WORKTREE_PATH}/subB`,
+      subagents: [
+        {
+          id: 'docs',
+          description: 'Draft the docs',
+          agentType: 'writing',
+          state: 'working',
+          startedAt: NOW - 2_000,
+          job: { taskId: 'task-docs', lifecycle: 'running' }
+        }
+      ]
+    })
+    act(() => {
+      useAppStore.setState({
+        activeWorktreeId: WORKTREE_ID,
+        tabsByWorktree: { [WORKTREE_ID]: [tab] },
+        agentStatusByPaneKey: { [PANE_KEY]: entryA, [PANE_KEY_B]: entryB },
+        worktreesByRepo: {
+          'repo-1': [
+            { id: WORKTREE_ID, repoId: 'repo-1', path: WORKTREE_PATH } as unknown as Worktree
+          ]
+        }
+      })
+    })
+    const host = mount()
+
+    const childB = [...host.querySelectorAll<HTMLElement>('[data-live-agent-row]')].find(
+      (el) => el.getAttribute('data-live-agent-row') === `${PANE_KEY_B}\u0000subagent:docs`
+    )
+    click(childB?.querySelector('[data-live-agent-live-output]'))
+    expect(openSubagentLiveInFloatingWorkspace).toHaveBeenCalledWith({
+      worktreeCwd: `${WORKTREE_PATH}/subB`,
+      taskId: 'task-docs',
+      label: 'Draft the docs'
+    })
+
+    const childA = [...host.querySelectorAll<HTMLElement>('[data-live-agent-row]')].find(
+      (el) => el.getAttribute('data-live-agent-row') === `${PANE_KEY}\u0000subagent:map`
+    )
+    click(childA?.querySelector('[data-live-agent-live-output]'))
+    expect(openSubagentLiveInFloatingWorkspace).toHaveBeenLastCalledWith({
+      worktreeCwd: `${WORKTREE_PATH}/subA`,
+      taskId: 'task-map',
+      label: 'Map shell navigation'
+    })
+  })
+
   it('offers live output on flat subagent rows and hides it when the workspace path is unknown', () => {
     seed(makeEntry())
     const host = mount()

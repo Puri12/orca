@@ -17,8 +17,9 @@ import {
 import { dagStatusToDotState, type LiveAgentGraphNode } from './live-agent-sections'
 
 type ActivatePane = (tabId: string, paneKey: string) => void
-/** Open the floating live-output view for one child task. */
-export type OpenSubagentLive = (taskId: string, label: string) => void
+/** Open the floating live-output view for one child task; `sessionCwd` is the
+ *  parent omo session's real cwd, where that child's transcript lives. */
+export type OpenSubagentLive = (taskId: string, label: string, sessionCwd: string | null) => void
 
 function stopRowKeyPropagation(e: React.KeyboardEvent): void {
   // Why: the enclosing sidebar list treats Enter/Space as row activation; the
@@ -184,9 +185,9 @@ export function LiveAgentCompactRow({
   // Why: a synthetic subagent row stores the child's description as its prompt.
   const openLive = useCallback(() => {
     if (taskId) {
-      onOpenSubagentLive?.(taskId, agent.entry.prompt || taskId)
+      onOpenSubagentLive?.(taskId, agent.entry.prompt || taskId, agent.entry.sessionCwd ?? null)
     }
-  }, [agent.entry.prompt, onOpenSubagentLive, taskId])
+  }, [agent.entry.prompt, agent.entry.sessionCwd, onOpenSubagentLive, taskId])
   return (
     <Collapsible
       open={open}
@@ -218,20 +219,23 @@ export function LiveAgentGraphNodeRow({
   graphNode,
   now,
   onJump,
-  onOpenSubagentLive
+  onOpenSubagentLive,
+  sessionCwd
 }: {
   graphNode: LiveAgentGraphNode
   now: number
   onJump: () => void
   onOpenSubagentLive?: OpenSubagentLive
+  /** The root session's cwd: jobGraph nodes run inside it, so their transcripts live there. */
+  sessionCwd: string | null
 }): React.JSX.Element {
   const { node, dependsOnLabels } = graphNode
   const taskId = graphNode.taskId
   const openLive = useCallback(() => {
     if (taskId) {
-      onOpenSubagentLive?.(taskId, node.label)
+      onOpenSubagentLive?.(taskId, node.label, sessionCwd)
     }
-  }, [node.label, onOpenSubagentLive, taskId])
+  }, [node.label, onOpenSubagentLive, sessionCwd, taskId])
   const [open, setOpen] = useState(false)
   const source = useMemo(() => currentWorkSourceFromGraphNode(graphNode), [graphNode])
   const dotState = dagStatusToDotState(node.status)
