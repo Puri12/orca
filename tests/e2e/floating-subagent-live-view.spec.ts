@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, readdirSync, appendFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, appendFileSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
@@ -16,13 +16,61 @@ const FIXTURE_DIR = path.resolve(
   '__fixtures__',
   'child-session-st_01a08fe1'
 )
+// Why: real bytes of an eval call/result whose arguments and envelope used to render as JSON.
+const ENVELOPED_FIXTURE_DIR = path.resolve(
+  __dirname,
+  '..',
+  '..',
+  'src',
+  'main',
+  'omo',
+  '__fixtures__',
+  'child-session-st_01a09032'
+)
 const OPEN_PANEL_SELECTOR = '[data-floating-terminal-panel][aria-hidden="false"]'
+
+type FixtureRecord = {
+  message?: {
+    role?: string
+    toolName?: string
+    content?: { type?: string; name?: string; text?: string; arguments?: { code?: string } }[]
+  }
+}
+
+/** The eval call that printed `marker` and its result, as the raw JSONL lines omo wrote. */
+function evalFixtureLines(dir: string, marker: string): { call: string; result: string } {
+  const turnFile = readdirSync(dir).find((name) => name.endsWith('.jsonl')) ?? ''
+  const lines = readFileSync(path.join(dir, turnFile), 'utf8')
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+  const parsed = lines.map((line) => JSON.parse(line) as FixtureRecord)
+  const callIndex = parsed.findIndex((record) =>
+    record.message?.content?.some(
+      (block) =>
+        block.type === 'toolCall' &&
+        block.name === 'eval' &&
+        block.arguments?.code?.includes(marker) === true
+    )
+  )
+  const resultIndex = parsed.findIndex(
+    (record, index) =>
+      index > callIndex &&
+      record.message?.role === 'toolResult' &&
+      record.message.toolName === 'eval' &&
+      record.message.content?.[0]?.text === marker
+  )
+  if (callIndex === -1 || resultIndex === -1) {
+    throw new Error(`fixture ${turnFile} has no eval call/result for ${marker}`)
+  }
+  return { call: lines[callIndex], result: lines[resultIndex] }
+}
 
 /**
  * Clicking a subagent row's live-output action must open the floating Subagent-Live
  * view and stream that child's senpi transcript from
  * `<worktree>/.omo/senpi-task/children/<taskId>/sessions/<taskId>/` — replaying what
- * omo already wrote, then following a line appended while the view is open.
+ * omo already wrote, then following a line appended while the view is open. The pane
+ * reads as a chat conversation: role rows, humanized tool rows, no raw JSON.
  */
 test('Live Agents subagent row opens a floating view that replays and tails the child transcript', async ({
   orcaPage
@@ -114,22 +162,31 @@ test('Live Agents subagent row opens a floating view that replays and tails the 
   await expect(pane).toHaveAttribute('data-subagent-live-phase', 'live')
   await expect(pane).toContainText('Demo child')
 
-  // Why: the replay must show the fixture's real turn content, in order.
+  // Why: the replay must show the fixture's real turn content, in order, as chat rows.
   const log = pane.locator('[data-subagent-live-log]')
-  await expect(log.locator('[data-subagent-live-line="user"]').first()).toContainText(
+  await expect(log.locator('[data-subagent-live-role="user"]').first()).toContainText(
     'say s1-start'
   )
-  await expect(log.locator('[data-subagent-live-line="tool-call"]').first()).toContainText('eval')
+  const firstToolCall = log.locator('[data-subagent-live-line="tool-call"]').first()
+  await expect(firstToolCall).toContainText('eval')
+  await expect(firstToolCall).toContainText('sleep 4 && echo s2-tool-ok')
+  await expect(firstToolCall.locator('button[aria-expanded]')).toHaveCount(1)
   await expect(log.locator('[data-subagent-live-line="tool-result"]').first()).toContainText(
     'eval run requires language'
   )
-  await expect(log.locator('[data-subagent-live-line="assistant"]').last()).toContainText('s3-end')
+  await expect(
+    log
+      .locator('[data-subagent-live-role="assistant"] [data-subagent-live-line="assistant"]')
+      .last()
+  ).toContainText('s3-end')
 
-  // Why: a line the child appends after the view opened must stream in without a reopen.
+  // Why: a line the child appends after the view opened must stream in without a reopen,
+  // and a real multi-key eval call plus its enveloped result must land as data, not JSON.
   const newestTurn = path.join(sessionDir, turnFiles.at(-1) ?? '')
+  const evalLines = evalFixtureLines(ENVELOPED_FIXTURE_DIR, 'S1-boot')
   appendFileSync(
     newestTurn,
-    `${JSON.stringify({
+    `${evalLines.call}\n${evalLines.result}\n${JSON.stringify({
       type: 'message',
       timestamp: new Date().toISOString(),
       message: {
@@ -142,11 +199,19 @@ test('Live Agents subagent row opens a floating view that replays and tails the 
   await expect(log.locator('[data-subagent-live-line="assistant"]').last()).toContainText(
     'live-tail-ok'
   )
+  const lastToolCall = log.locator('[data-subagent-live-line="tool-call"]').last()
+  await expect(lastToolCall).toContainText('console.log("S1-boot");')
+  await expect(log.locator('[data-subagent-live-line="tool-result"]').last()).toContainText(
+    'S1-boot'
+  )
+  await expect(log).not.toContainText('{"')
 
   // Why: a second click focuses the existing tab rather than opening a duplicate.
   await liveOutput.click()
   await expect(floating.locator(`[data-subagent-live-pane="${TASK_ID}"]`)).toHaveCount(1)
 
+  // Why: the evidence screenshot must show the chat look with the tool rows visible.
+  await lastToolCall.scrollIntoViewIfNeeded()
   if (process.env.ORCA_SUBAGENT_LIVE_EVIDENCE_PATH) {
     await mkdir(path.dirname(process.env.ORCA_SUBAGENT_LIVE_EVIDENCE_PATH), { recursive: true })
     await orcaPage.screenshot({ path: process.env.ORCA_SUBAGENT_LIVE_EVIDENCE_PATH })
