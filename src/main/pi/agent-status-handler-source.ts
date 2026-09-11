@@ -119,6 +119,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...captureSessionMetadata,
     ...(kind === 'omo'
       ? [
+          "    if (event.toolName === 'workflow') captureWorkflowStart(event)",
           "    if (event.toolName === 'task') {",
           '      const { toolCallId, args = {} } = event',
           '      // Why: a batch spawn (args.tasks[]) is many children under one tool call; one row each.',
@@ -149,6 +150,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...captureSessionMetadata,
     ...(kind === 'omo'
       ? [
+          "    if (event.toolName === 'workflow') captureWorkflowEnd(event)",
           '    const details = event.result?.details',
           "    const hasStatusResult = typeof details === 'object' && details !== null",
           "    const resultKind = typeof details?.kind === 'string' ? details.kind : undefined",
@@ -157,22 +159,23 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           "    const snapshot = typeof details?.snapshot === 'object' && details.snapshot !== null ? details.snapshot : undefined",
           "    const effTaskId = (typeof details?.task_id === 'string' && details.task_id ? details.task_id : undefined) ?? (typeof snapshot?.task_id === 'string' && snapshot.task_id ? snapshot.task_id : undefined)",
           '    const effStatus = details?.status ?? snapshot?.status',
+          '    const effRunStats = toRunStats(details?.run_stats ?? snapshot?.run_stats)',
           '    const items = Array.isArray(details?.items) ? details.items : undefined',
           '    const batchRows = [...jobRoster.keys()].filter((id) => id.startsWith(event.toolCallId + ":"))',
           '    if (items) {',
           '      // Why: a batch result reports each child under items[]; map them onto the batch rows in order.',
           '      items.forEach((item, i) => {',
           "        const tid = typeof item?.task_id === 'string' ? item.task_id : undefined",
-          "        applyStatus(tid, item?.status, batchRows[i], event.isError, true, typeof item?.kind === 'string' ? item.kind : undefined)",
+          "        applyStatus(tid, item?.status, batchRows[i], event.isError, true, typeof item?.kind === 'string' ? item.kind : undefined, toRunStats(item?.run_stats))",
           '      })',
           '    } else if (batchRows.length) {',
           '      // Why: a single-item tasks[] collapses to one no-items result, and a whole-batch refusal',
           '      // returns none; reconcile the first provisional row and finish the rest by the invocation outcome.',
-          '      applyStatus(effTaskId, effStatus, batchRows[0], event.isError, hasStatusResult, resultKind)',
+          '      applyStatus(effTaskId, effStatus, batchRows[0], event.isError, hasStatusResult, resultKind, effRunStats)',
           '      for (const rowId of batchRows.slice(1)) applyStatus(undefined, effStatus, rowId, event.isError, hasStatusResult, resultKind)',
           '    } else {',
           '      // Why: a refused spawn returns a terminal status with an empty task_id; finish the row by isError.',
-          '      applyStatus(effTaskId, effStatus, event.toolCallId, event.isError, hasStatusResult, resultKind)',
+          '      applyStatus(effTaskId, effStatus, event.toolCallId, event.isError, hasStatusResult, resultKind, effRunStats)',
           '    }'
         ]
       : []),

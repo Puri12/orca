@@ -2,6 +2,13 @@
 // Why: status comes from hooks (Claude, Codex, etc.) — never inferred from terminal titles;
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
+import {
+  agentRunStatsEqual,
+  normalizeJobGraphField,
+  normalizeRunStatsField,
+  type AgentJobGraph,
+  type AgentRunStats
+} from './agent-job-graph'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
@@ -105,6 +112,8 @@ export type AgentSubagentJob = {
   taskId?: string
   lifecycle?: AgentSubagentJobLifecycle
   currentStep?: string
+  /** Present only once the child reached a terminal result that carried stats. */
+  runStats?: AgentRunStats
 }
 
 /** A live in-process child of the pane's provider session. Rendered as an
@@ -184,6 +193,7 @@ export type AgentStatusEntry = {
   /** Live in-process subagents/teammates of this pane's session. Absent when
    *  none are tracked; the sidebar derives indented child rows from it. */
   subagents?: AgentSubagentSnapshot[]
+  jobGraph?: AgentJobGraph
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
@@ -227,6 +237,7 @@ export type AgentStatusPayload = {
   turnCompletedAt?: number
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
+  jobGraph?: AgentJobGraph
 }
 
 /**
@@ -236,36 +247,7 @@ export type AgentStatusPayload = {
  */
 export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { prompt: string }
 
-/**
- * Narrow an `AgentStatusIpcPayload` (or any superset) down to the status fields alone.
- * Why: the IPC shape is flattened, so a spread cannot be narrowed structurally — copying
- * a hook row into a client-visible projection would otherwise ship `launchToken`,
- * `connectionId`, `promptInteractionKey` and `providerSessionOnly` to every paired client.
- */
-export function pickParsedAgentStatusPayload(
-  row: ParsedAgentStatusPayload
-): ParsedAgentStatusPayload {
-  return {
-    state: row.state,
-    ...(row.workingMode !== undefined ? { workingMode: row.workingMode } : {}),
-    prompt: row.prompt,
-    ...(row.agentType !== undefined ? { agentType: row.agentType } : {}),
-    ...(row.model !== undefined ? { model: row.model } : {}),
-    ...(row.toolName !== undefined ? { toolName: row.toolName } : {}),
-    ...(row.toolInput !== undefined ? { toolInput: row.toolInput } : {}),
-    ...(row.interactivePrompt !== undefined ? { interactivePrompt: row.interactivePrompt } : {}),
-    ...(row.lastAssistantMessage !== undefined
-      ? { lastAssistantMessage: row.lastAssistantMessage }
-      : {}),
-    ...(row.lastAssistantMessageIsToolOutput !== undefined
-      ? { lastAssistantMessageIsToolOutput: row.lastAssistantMessageIsToolOutput }
-      : {}),
-    ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
-    ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
-    ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
-    ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
-  }
-}
+export { pickParsedAgentStatusPayload } from './agent-status-payload-projection'
 
 /**
  * Wire shape for agent-status IPC. Both `agentStatus:set` and `agentStatus:getSnapshot`
@@ -318,20 +300,22 @@ function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null
   }
   let job: AgentSubagentJob | undefined
   if (typeof obj.job === 'object' && obj.job !== null && !Array.isArray(obj.job)) {
-    const { taskId, currentStep, lifecycle } = obj.job as Record<string, unknown>
+    const { taskId, currentStep, lifecycle, runStats } = obj.job as Record<string, unknown>
+    const stats = normalizeRunStatsField(runStats)
     job = {
       taskId: normalizeOptionalField(taskId, AGENT_SUBAGENT_ID_MAX_LENGTH),
       currentStep: normalizeOptionalField(currentStep, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
       lifecycle:
         typeof lifecycle === 'string' && VALID_JOB_LIFECYCLES.has(lifecycle)
           ? (lifecycle as AgentSubagentJobLifecycle)
-          : undefined
+          : undefined,
+      ...(stats ? { runStats: stats } : {})
     }
   }
   return {
     id,
     state: obj.state as AgentSubagentState,
-    ...(job && (job.taskId || job.lifecycle || job.currentStep) ? { job } : {}),
+    ...(job && (job.taskId || job.lifecycle || job.currentStep || job.runStats) ? { job } : {}),
     startedAt: Number.isFinite(obj.startedAt) ? (obj.startedAt as number) : 0,
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
     model: normalizeOptionalField(obj.model, AGENT_MODEL_MAX_LENGTH),
@@ -376,7 +360,8 @@ export function agentSubagentsEqual(
       x.description === y.description &&
       x.job?.taskId === y.job?.taskId &&
       x.job?.lifecycle === y.job?.lifecycle &&
-      x.job?.currentStep === y.job?.currentStep
+      x.job?.currentStep === y.job?.currentStep &&
+      agentRunStatsEqual(x.job?.runStats, y.job?.runStats)
     )
   })
 }
@@ -425,7 +410,8 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
     turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
-    subagents: normalizeSubagentsField(obj.subagents)
+    subagents: normalizeSubagentsField(obj.subagents),
+    ...(obj.jobGraph !== undefined ? { jobGraph: normalizeJobGraphField(obj.jobGraph) } : {})
   }
 }
 

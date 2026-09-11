@@ -94,6 +94,7 @@ export function deriveAgentStatusLiveFacts(args: AgentStatusLiveFactsArgs): Agen
       entry.lastAssistantMessageIsToolOutput !== existing.lastAssistantMessageIsToolOutput ||
       entry.orchestration !== existing.orchestration ||
       entry.subagents !== existing.subagents ||
+      entry.jobGraph !== existing.jobGraph ||
       entry.providerSession !== existing.providerSession ||
       entry.interrupted !== existing.interrupted)
   const retentionRelevantChange =

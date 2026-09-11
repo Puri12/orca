@@ -1,7 +1,8 @@
+import { EventEmitter, once } from 'node:events'
 import { runInNewContext } from 'node:vm'
 // TypeScript 7 is a native CLI; transpile tests still need the legacy JavaScript API.
 import ts from 'typescript-api'
-import { vi } from 'vitest'
+import { expect, vi } from 'vitest'
 
 import { getPiAgentStatusExtensionSource } from './agent-status-extension-source'
 
@@ -38,6 +39,31 @@ export type AgentStatusExtensionHarness = {
   // Re-invoke the extension factory in the same process (as Pi does on an
   // in-process extension reload), swapping in the freshly registered handlers.
   reload: () => void
+}
+
+// Why: roster tests assert on posted payloads, so the fetch stub publishes each body as an event
+// and post() subscribes before invoking the hook. Payload type stays inferred from once().
+export function createAgentStatusPostingHarness(
+  args: Parameters<typeof createAgentStatusExtensionHarness>[0] = { kind: 'omo' }
+) {
+  const posts = new EventEmitter()
+  const harness = createAgentStatusExtensionHarness({
+    ...args,
+    fetchImpl: async (_url, init) => {
+      posts.emit('post', JSON.parse(String(init?.body)).payload)
+      return { ok: true }
+    }
+  })
+  return {
+    ...harness,
+    async post(name: string, event?: unknown, context?: HookContext) {
+      const posted = once(posts, 'post', { signal: AbortSignal.timeout(2_000) })
+      await harness.callHook(name, event, context)
+      const [payload] = await posted
+      expect(payload.hook_event_name).toBe(name === 'agent_settled' ? 'agent_end' : name)
+      return payload
+    }
+  }
 }
 
 const BASE_ENV = {

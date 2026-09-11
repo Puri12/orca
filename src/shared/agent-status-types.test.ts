@@ -578,6 +578,44 @@ Fix dispatch fallback preview for normalized status prompts`
     expect(parseAgentStatusPayload('{"state":"done"}')?.subagents).toBeUndefined()
     expect(parseAgentStatusPayload('{"state":"done","subagents":[]}')?.subagents).toBeUndefined()
   })
+
+  it('carries finite job runStats through subagent normalization and drops the rest', () => {
+    const runStats = { turns: 12, toolCalls: 34, tokensPerSecond: 40, runtimeMs: 5000 }
+    const result = normalizeAgentStatusPayload({
+      state: 'working',
+      subagents: [
+        {
+          id: 'a',
+          state: 'idle',
+          startedAt: 1,
+          job: { taskId: 'st_a', lifecycle: 'succeeded', runStats }
+        },
+        {
+          id: 'b',
+          state: 'idle',
+          startedAt: 1,
+          job: {
+            lifecycle: 'succeeded',
+            runStats: { turns: 3, toolCalls: 'x', runtimeMs: Number.NaN }
+          }
+        },
+        { id: 'c', state: 'idle', startedAt: 1, job: { lifecycle: 'succeeded', runStats: {} } },
+        { id: 'd', state: 'idle', startedAt: 1, job: { runStats: { turns: 1 } } },
+        { id: 'e', state: 'idle', startedAt: 1, job: { lifecycle: 'succeeded' } }
+      ]
+    })!
+    expect(result.subagents?.[0].job).toEqual({ taskId: 'st_a', lifecycle: 'succeeded', runStats })
+    expect(result.subagents?.[1].job?.runStats).toEqual({ turns: 3 })
+    expect(result.subagents?.[2].job).not.toHaveProperty('runStats')
+    // Why: stats alone are enough to keep the job object; a finished child may report nothing else.
+    expect(result.subagents?.[3].job).toEqual({ runStats: { turns: 1 } })
+    expect(result.subagents?.[4].job).not.toHaveProperty('runStats')
+    expect(structuredClone(result).subagents?.[0].job?.runStats).toEqual(runStats)
+    expect(agentSubagentsEqual(result.subagents, structuredClone(result.subagents))).toBe(true)
+    const changed = structuredClone(result.subagents)!
+    changed[0].job!.runStats!.turns = 13
+    expect(agentSubagentsEqual(result.subagents, changed)).toBe(false)
+  })
 })
 
 describe('agentSubagentsEqual', () => {

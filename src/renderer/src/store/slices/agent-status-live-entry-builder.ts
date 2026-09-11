@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import {
   AGENT_STATE_HISTORY_MAX,
   agentSubagentsEqual,
@@ -217,6 +218,9 @@ export function buildAgentStatusLiveEntry(
       : undefined) ??
     matchedRegistryLaunchConfig ??
     matchedSleepingLaunchConfig
+  const jobGraph = structuralValuesEqual(existing?.jobGraph, payload.jobGraph)
+    ? existing?.jobGraph
+    : payload.jobGraph
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -258,6 +262,7 @@ export function buildAgentStatusLiveEntry(
     subagents: agentSubagentsEqual(existing?.subagents, payload.subagents)
       ? existing?.subagents
       : payload.subagents,
+    ...(jobGraph !== undefined ? { jobGraph } : {}),
     ...(providerSession ? { providerSession } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }

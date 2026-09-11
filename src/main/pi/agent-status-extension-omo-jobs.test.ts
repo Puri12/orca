@@ -1,33 +1,195 @@
-import { EventEmitter, once } from 'node:events'
 import { describe, expect, it } from 'vitest'
 
-import {
-  createAgentStatusExtensionHarness,
-  type HookContext
-} from './agent-status-extension-test-harness'
+import { createAgentStatusPostingHarness as createHarness } from './agent-status-extension-test-harness'
 
-function createHarness(
-  args: Parameters<typeof createAgentStatusExtensionHarness>[0] = { kind: 'omo' }
-) {
-  const posts = new EventEmitter()
-  const harness = createAgentStatusExtensionHarness({
-    ...args,
-    fetchImpl: async (_url, init) => {
-      posts.emit('post', JSON.parse(String(init?.body)).payload)
-      return { ok: true }
+const workflowDefinition = {
+  key: 'pipeline',
+  name: 'Pipeline',
+  nodes: [
+    { id: 'A', label: 'Plan', category: 'deep', prompt: 'Plan' },
+    { id: 'B', dependsOn: ['A'], category: 'deep', prompt: 'Build' },
+    { id: 'C', dependsOn: ['A', 'B'], category: 'deep', prompt: 'Verify' }
+  ],
+  waves: [['A'], ['B'], ['C']]
+}
+const workflowGraph = {
+  runLabel: 'Pipeline',
+  nodes: [
+    { nodeId: 'A', label: 'Plan', dependsOn: [] },
+    { nodeId: 'B', dependsOn: ['A'] },
+    { nodeId: 'C', dependsOn: ['A', 'B'] }
+  ],
+  waves: workflowDefinition.waves
+}
+const workflow = (toolCallId = 'w1', args: Record<string, unknown> = {}) => ({
+  toolName: 'workflow',
+  toolCallId,
+  args: { action: 'start', definition: workflowDefinition, ...args }
+})
+
+describe('omo workflow graph', () => {
+  it('emits definition dependencies and waves alongside an existing task roster', async () => {
+    const harness = createHarness()
+    const taskOnly = await harness.post('tool_execution_start', task('t1'))
+    expect(taskOnly).not.toHaveProperty('jobGraph')
+    const started = await harness.post('tool_execution_start', workflow())
+    expect(started.jobGraph).toEqual(workflowGraph)
+    expect(started.subagents).toEqual(taskOnly.subagents)
+    expect((await harness.post('agent_start')).jobGraph).toEqual(workflowGraph)
+  })
+
+  it('joins snapshot child IDs and object waves, then tracks task terminal observations', async () => {
+    const harness = createHarness()
+    await harness.post('tool_execution_start', workflow())
+    const snapshot = {
+      runId: 'run-1',
+      name: 'Pipeline',
+      status: 'running',
+      nodes: workflowDefinition.nodes.map((node) => ({
+        ...node,
+        dependsOn: node.dependsOn ?? [],
+        taskId: `st_${node.id}`,
+        state: 'running'
+      })),
+      waves: workflowDefinition.waves.map((nodeIds, index) => ({ index, nodeIds }))
+    }
+    const ended = await harness.post('tool_execution_end', {
+      toolName: 'workflow',
+      toolCallId: 'w1',
+      result: { details: { kind: 'started', run_id: 'run-1', snapshot } }
+    })
+    expect(ended.jobGraph).toEqual({
+      ...workflowGraph,
+      runId: 'run-1',
+      nodes: workflowGraph.nodes.map((node) => ({
+        ...node,
+        taskId: `st_${node.nodeId}`,
+        state: 'running'
+      }))
+    })
+    expect(ended.subagents.map((row: { job: { taskId: string } }) => row.job.taskId)).toEqual([
+      'st_A',
+      'st_B',
+      'st_C'
+    ])
+    const terminal = await harness.post('tool_execution_end', {
+      toolName: 'task_output',
+      toolCallId: 'output-1',
+      result: { details: { snapshot: { task_id: 'st_A', status: 'completed' } } }
+    })
+    expect(terminal.jobGraph.nodes[0]).toEqual({
+      ...workflowGraph.nodes[0],
+      taskId: 'st_A',
+      state: 'completed'
+    })
+    expect(terminal.subagents[0].job.lifecycle).toBe('succeeded')
+    const continued = await harness.post('before_agent_start', { prompt: 'continue' })
+    expect(continued.jobGraph).toEqual(terminal.jobGraph)
+    expect(continued.subagents.map((row: { job: { taskId: string } }) => row.job.taskId)).toEqual([
+      'st_B',
+      'st_C'
+    ])
+    const waited = await harness.post('tool_execution_end', {
+      toolName: 'workflow',
+      toolCallId: 'wait-1',
+      result: {
+        details: {
+          kind: 'waited',
+          run_id: 'run-1',
+          result: {
+            snapshot: {
+              ...snapshot,
+              status: 'completed',
+              nodes: snapshot.nodes.map((node) => ({ ...node, state: 'completed' }))
+            }
+          }
+        }
+      }
+    })
+    expect(waited.jobGraph.nodes.map((node: { state: string }) => node.state)).toEqual([
+      'completed',
+      'completed',
+      'completed'
+    ])
+    expect(await harness.post('before_agent_start', { prompt: 'new task' })).not.toHaveProperty(
+      'jobGraph'
+    )
+  })
+
+  it('does not fabricate waves or IDs and drops a refused definition', async () => {
+    const harness = createHarness()
+    const { waves: _waves, ...definition } = workflowDefinition
+    const started = await harness.post('tool_execution_start', workflow('w1', { definition }))
+    expect(started.jobGraph).toEqual({ nodes: workflowGraph.nodes, runLabel: 'Pipeline' })
+    const refused = await harness.post('tool_execution_end', {
+      toolName: 'workflow',
+      toolCallId: 'w1',
+      isError: false,
+      result: { details: { kind: 'error', error: { code: 'invalid_definition' } } }
+    })
+    expect(refused).not.toHaveProperty('jobGraph')
+  })
+
+  it.each([
+    undefined,
+    { nodes: [] },
+    { nodes: [{ id: 12 }] },
+    { nodes: [{ id: 'A', dependsOn: [42] }] }
+  ])('omits malformed definitions (%j)', async (definition) => {
+    const harness = createHarness()
+    expect(
+      await harness.post('tool_execution_start', workflow('w1', { definition }))
+    ).not.toHaveProperty('jobGraph')
+  })
+
+  it('adopts attached runs and ignores late results from a replaced run', async () => {
+    const harness = createHarness()
+    await harness.post(
+      'tool_execution_start',
+      workflow('attach-1', { action: 'attach', definition: undefined, run_id: 'run-1' })
+    )
+    const attached = await harness.post('tool_execution_end', {
+      toolName: 'workflow',
+      toolCallId: 'attach-1',
+      result: {
+        details: {
+          kind: 'attached',
+          run_id: 'run-1',
+          snapshot: { ...workflowDefinition, runId: 'run-1', status: 'running' }
+        }
+      }
+    })
+    expect(attached.jobGraph).toEqual({ ...workflowGraph, runId: 'run-1' })
+    await harness.post(
+      'tool_execution_start',
+      workflow('w2', { definition: { key: 'next', nodes: [{ id: 'D' }] } })
+    )
+    const late = await harness.post('tool_execution_end', {
+      toolName: 'workflow',
+      toolCallId: 'attach-1',
+      result: {
+        details: {
+          kind: 'snapshot',
+          run_id: 'run-1',
+          snapshot: { ...workflowDefinition, runId: 'run-1' }
+        }
+      }
+    })
+    expect(late.jobGraph).toEqual({ nodes: [{ nodeId: 'D', dependsOn: [] }] })
+  })
+
+  it('does not leak graph state into another session or another agent kind', async () => {
+    const harness = createHarness()
+    await harness.post('tool_execution_start', workflow())
+    await harness.callHook('session_start', { reason: 'switch' })
+    expect(await harness.post('tool_execution_start', task('t1'))).not.toHaveProperty('jobGraph')
+    for (const kind of ['pi', 'omp', 'prime-agent'] as const) {
+      expect(
+        await createHarness({ kind }).post('tool_execution_start', workflow())
+      ).not.toHaveProperty('jobGraph')
     }
   })
-  return {
-    ...harness,
-    async post(name: string, event?: unknown, context?: HookContext) {
-      const posted = once(posts, 'post', { signal: AbortSignal.timeout(2_000) })
-      await harness.callHook(name, event, context)
-      const [payload] = await posted
-      expect(payload.hook_event_name).toBe(name === 'agent_settled' ? 'agent_end' : name)
-      return payload
-    }
-  }
-}
+})
 
 const task = (toolCallId: string, args: Record<string, unknown> = {}) => ({
   toolName: 'task',
@@ -53,6 +215,8 @@ describe('omo task roster', () => {
       }
     ])
     const ended = await harness.post('tool_execution_end', { toolCallId: 't1', isError })
+    expect(started).not.toHaveProperty('jobGraph')
+    expect(ended).not.toHaveProperty('jobGraph')
     expect(ended.subagents).toEqual([
       {
         ...started.subagents[0],

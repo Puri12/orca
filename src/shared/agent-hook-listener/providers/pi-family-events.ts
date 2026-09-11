@@ -73,6 +73,9 @@ export function normalizePiCompatibleEvent(
     // Why: omo reports its background jobs as a subagent roster; forwarding it is what makes them appear live on the dashboard.
     ...(agentType === 'omo' && hookPayload.subagents !== undefined
       ? { subagents: hookPayload.subagents }
+      : {}),
+    ...(agentType === 'omo' && hookPayload.jobGraph !== undefined
+      ? { jobGraph: hookPayload.jobGraph }
       : {})
   })
 }
