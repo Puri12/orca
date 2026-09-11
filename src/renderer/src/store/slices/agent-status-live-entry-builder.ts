@@ -263,6 +263,7 @@ export function buildAgentStatusLiveEntry(
       ? existing?.subagents
       : payload.subagents,
     ...(jobGraph !== undefined ? { jobGraph } : {}),
+    sessionCwd: payload.sessionCwd ?? existing?.sessionCwd,
     ...(providerSession ? { providerSession } : {}),
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }

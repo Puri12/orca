@@ -698,6 +698,15 @@ describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
     { state: 'working', prompt: 'p', agentType: 'grok', lastAssistantMessage: 'lone \ud800 pair' }
   ]
 
+  it('preserves non-empty sessionCwd string (omo real cwd) and rejects empty/invalid', () => {
+    const valid = parseAgentStatusPayload('{"state":"working","sessionCwd":"/real/session/cwd"}')
+    expect(valid!.sessionCwd).toBe('/real/session/cwd')
+    const empty = parseAgentStatusPayload('{"state":"working","sessionCwd":""}')
+    expect(empty!.sessionCwd).toBeUndefined()
+    const nonString = parseAgentStatusPayload('{"state":"working","sessionCwd":123}')
+    expect(nonString!.sessionCwd).toBeUndefined()
+  })
+
   it('produces identical output for every normalizer literal shape', () => {
     for (const [index, payload] of CASES.entries()) {
       expect({

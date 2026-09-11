@@ -416,6 +416,35 @@ describe('LiveAgentsPanel', () => {
     ).toBeNull()
   })
 
+  it('prefers entry.sessionCwd over worktree path for live output (RED->GREEN)', () => {
+    const REAL_CWD = '/real/session/cwd'
+    seed({
+      ...makeEntry({ jobGraph }),
+      sessionCwd: REAL_CWD
+    })
+    const host = mount()
+
+    click(host.querySelector('[data-live-agent-node="A"] [data-live-agent-live-output]'))
+    expect(openSubagentLiveInFloatingWorkspace).toHaveBeenCalledWith({
+      worktreeCwd: REAL_CWD,
+      taskId: 'task-map',
+      label: 'Map shell navigation'
+    })
+
+    // without sessionCwd falls back
+    act(() => root?.unmount())
+    root = null
+    container?.remove()
+    seed(makeEntry({ jobGraph }))
+    const host2 = mount()
+    click(host2.querySelector('[data-live-agent-node="A"] [data-live-agent-live-output]'))
+    expect(openSubagentLiveInFloatingWorkspace).toHaveBeenLastCalledWith({
+      worktreeCwd: WORKTREE_PATH,
+      taskId: 'task-map',
+      label: 'Map shell navigation'
+    })
+  })
+
   it('offers live output on flat subagent rows and hides it when the workspace path is unknown', () => {
     seed(makeEntry())
     const host = mount()

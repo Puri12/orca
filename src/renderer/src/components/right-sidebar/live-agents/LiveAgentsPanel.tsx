@@ -151,11 +151,16 @@ export default function LiveAgentsPanel(): React.JSX.Element {
     },
     [worktreeId]
   )
-  // Why: the child transcript lives under the workspace the omo pane runs in, so the
-  // action is only offered once that path resolves (git worktree or folder workspace).
-  const worktreeCwd = useAppStore((state) =>
-    worktreeId ? (state.getKnownWorktreeById(worktreeId)?.path ?? null) : null
-  )
+  // Why: prefer hook-reported sessionCwd (omo real cwd for transcripts); fallback to worktree path for older builds. The agent status entry for the pane is already read in that panel (reuse for jobGraph/subagents).
+  const worktreeCwd = useAppStore((state) => {
+    if (!worktreeId) {
+      return null
+    }
+    const entry = Object.values(state.agentStatusByPaneKey).find(
+      (e) => e.worktreeId === worktreeId || e.paneKey.includes(worktreeId)
+    )
+    return entry?.sessionCwd ?? state.getKnownWorktreeById(worktreeId)?.path ?? null
+  })
   const onOpenSubagentLive = useMemo<OpenSubagentLive | undefined>(
     () =>
       worktreeCwd

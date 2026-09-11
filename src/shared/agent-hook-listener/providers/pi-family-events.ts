@@ -76,6 +76,10 @@ export function normalizePiCompatibleEvent(
       : {}),
     ...(agentType === 'omo' && hookPayload.jobGraph !== undefined
       ? { jobGraph: hookPayload.jobGraph }
+      : {}),
+    // Why: pi-family forwards unknown fields whole (jobGraph/subagents precedent); sessionCwd reaches store entry.
+    ...(agentType === 'omo' && typeof hookPayload.sessionCwd === 'string'
+      ? { sessionCwd: hookPayload.sessionCwd }
       : {})
   })
 }

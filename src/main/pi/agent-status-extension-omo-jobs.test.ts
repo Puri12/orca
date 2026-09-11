@@ -178,6 +178,18 @@ describe('omo workflow graph', () => {
     expect(late.jobGraph).toEqual({ nodes: [{ nodeId: 'D', dependsOn: [] }] })
   })
 
+  it('emits sessionCwd only for omo payloads (process.cwd of session)', async () => {
+    const harness = createHarness()
+    const omoPayload = await harness.post('tool_execution_start', task('t1'))
+    expect(omoPayload).toHaveProperty('sessionCwd', process.cwd())
+    const nonOmoHarness = createHarness({ kind: 'pi' })
+    const piPayload = await nonOmoHarness.post('tool_execution_start', {
+      toolName: 'task',
+      toolCallId: 'pi1'
+    })
+    expect(piPayload).not.toHaveProperty('sessionCwd')
+  })
+
   it('does not leak graph state into another session or another agent kind', async () => {
     const harness = createHarness()
     await harness.post('tool_execution_start', workflow())

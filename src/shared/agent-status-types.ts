@@ -194,6 +194,8 @@ export type AgentStatusEntry = {
    *  none are tracked; the sidebar derives indented child rows from it. */
   subagents?: AgentSubagentSnapshot[]
   jobGraph?: AgentJobGraph
+  /** Real session cwd reported by omo hooks (transcripts live here; may be parent of worktree). */
+  sessionCwd?: string
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
@@ -238,6 +240,8 @@ export type AgentStatusPayload = {
   /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
   jobGraph?: AgentJobGraph
+  /** Real session cwd reported by omo hooks (transcripts live here; may be parent of worktree). */
+  sessionCwd?: string
 }
 
 /**
@@ -411,7 +415,9 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
     turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeSubagentsField(obj.subagents),
-    ...(obj.jobGraph !== undefined ? { jobGraph: normalizeJobGraphField(obj.jobGraph) } : {})
+    ...(obj.jobGraph !== undefined ? { jobGraph: normalizeJobGraphField(obj.jobGraph) } : {}),
+    sessionCwd:
+      typeof obj.sessionCwd === 'string' && obj.sessionCwd.length > 0 ? obj.sessionCwd : undefined
   }
 }
 

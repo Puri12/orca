@@ -23,6 +23,7 @@ export function pickParsedAgentStatusPayload(
     ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
     ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
     ...(row.subagents !== undefined ? { subagents: row.subagents } : {}),
-    ...(row.jobGraph !== undefined ? { jobGraph: row.jobGraph } : {})
+    ...(row.jobGraph !== undefined ? { jobGraph: row.jobGraph } : {}),
+    ...(row.sessionCwd !== undefined ? { sessionCwd: row.sessionCwd } : {})
   }
 }
