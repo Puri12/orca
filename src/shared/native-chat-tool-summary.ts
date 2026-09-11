@@ -10,16 +10,20 @@ const MAX_TOOL_RUN_SUMMARY_PARTS = 3
 // `directory` is a scan root or a listed folder — it labels a row but is
 // deliberately absent from the file-target keys below, because a folder reaches
 // mobile as a tappable open-file link that can only fail.
+// `code` is what an eval-style cell ran; its `summary` is prose, ranked with
+// `description`, so the concrete action still labels the row.
 const PRIMARY_ARG_KEYS = [
   'query',
   'pattern',
   'directory',
   'command',
   'cmd',
+  'code',
   'url',
-  'description'
+  'description',
+  'summary'
 ] as const
-const BRIEF_ARG_KEYS = ['query', 'pattern', 'directory', 'command', 'cmd'] as const
+const BRIEF_ARG_KEYS = ['query', 'pattern', 'directory', 'command', 'cmd', 'code'] as const
 // Only the keys that hold a shell command, so a search term or a listed folder
 // cannot stand in for one.
 const COMMAND_ARG_KEYS = ['command', 'cmd'] as const

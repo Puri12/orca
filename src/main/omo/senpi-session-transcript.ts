@@ -11,10 +11,11 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { toolResultOutput } from '../native-chat/transcript-record-blocks'
+import { createToolInputDisplay, summarizeToolInput } from '../../shared/native-chat-tool-summary'
 
-const TOOL_INPUT_PREVIEW_CHARS = 400
 const TOOL_OUTPUT_PREVIEW_CHARS = 4_000
 const ELLIPSIS = '…'
+const PREVIEW_SEPARATOR = ' · '
 
 function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}${ELLIPSIS}` : text
@@ -25,21 +26,78 @@ function parseTimestamp(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function toolInputPreview(value: unknown): string {
+/** First task named by a senpi todo argument tree (`task`, `items[0]`, `list[0].items[0]`). */
+function firstTodoItem(value: unknown): string | null {
   if (typeof value === 'string') {
-    return truncate(value, TOOL_INPUT_PREVIEW_CHARS)
+    return extractString(value)
   }
-  if (value === undefined || value === null) {
-    return ''
+  if (Array.isArray(value)) {
+    return value.length > 0 ? firstTodoItem(value[0]) : null
   }
-  // Why: a single-key argument object (eval `{code}`, bash `{command}`) reads
-  // better as its bare value than as JSON.
   const record = asRecord(value)
-  const keys = record ? Object.keys(record) : []
-  if (record && keys.length === 1 && typeof record[keys[0]] === 'string') {
-    return truncate(record[keys[0]] as string, TOOL_INPUT_PREVIEW_CHARS)
+  return record ? (firstTodoItem(record.task ?? record.items ?? record.list) ?? null) : null
+}
+
+/** `op · first item` for the senpi todo tool, whose `{op, list|items|task}` shape the shared
+ *  summarizer has no key for. */
+function todoPreview(record: Record<string, unknown>): string | null {
+  const op = extractString(record.op)
+  if (!op) {
+    return null
   }
-  return truncate(JSON.stringify(value), TOOL_INPUT_PREVIEW_CHARS)
+  const item = firstTodoItem(record)
+  return item ? `${op}${PREVIEW_SEPARATOR}${summarizeToolInput(item)}` : op
+}
+
+/** `key · value` pairs for an argument object the shared summarizer would only JSON-encode. */
+function entriesPreview(record: Record<string, unknown>): string {
+  return summarizeToolInput(
+    Object.entries(record)
+      .map(([key, value]) =>
+        typeof value === 'string' ? value : `${key}=${summarizeToolInput(value)}`
+      )
+      .join(PREVIEW_SEPARATOR)
+  )
+}
+
+function toolCall(name: string, args: unknown): SubagentTranscriptToolCall {
+  const display = createToolInputDisplay(args)
+  const record = asRecord(args)
+  const structuredFallback = display.label === summarizeToolInput(args)
+  const input =
+    record && structuredFallback ? (todoPreview(record) ?? entriesPreview(record)) : display.label
+  return { name, input, detail: display.hasDetail ? display.formatDetail() : null }
+}
+
+const TEXT_ENVELOPE_PREFIX = '{"text":"'
+
+/** Decode the JSON string literal that starts at `from` (just after its opening quote).
+ *  A literal cut off by senpi's output cap decodes up to the cut. */
+function decodeLeadingJsonString(output: string, from: number): string | null {
+  let end = from
+  while (end < output.length && output[end] !== '"') {
+    end += output[end] === '\\' ? 2 : 1
+  }
+  try {
+    return JSON.parse(`"${output.slice(from, Math.min(end, output.length))}"`) as string
+  } catch {
+    return null
+  }
+}
+
+/** senpi's eval/bash tools return `{"text": …}` envelopes as their text block; show the text.
+ *  The envelope may itself be truncated, so a well-formed parse is tried first. */
+function unwrapToolResultText(output: string): string {
+  if (!output.startsWith('{')) {
+    return output
+  }
+  const record = parseJsonObject(output)
+  if (record) {
+    return typeof record.text === 'string' ? record.text : output
+  }
+  return output.startsWith(TEXT_ENVELOPE_PREFIX)
+    ? (decodeLeadingJsonString(output, TEXT_ENVELOPE_PREFIX.length) ?? output)
+    : output
 }
 
 function collectContent(content: unknown): {
@@ -65,10 +123,7 @@ function collectContent(content: unknown): {
         texts.push(text)
       }
     } else if (block.type === 'toolCall') {
-      toolCalls.push({
-        name: extractString(block.name) ?? 'tool',
-        input: toolInputPreview(block.arguments)
-      })
+      toolCalls.push(toolCall(extractString(block.name) ?? 'tool', block.arguments))
     }
   }
   return { text: texts.join('\n'), toolCalls }
@@ -97,7 +152,10 @@ function parseMessage(
     return {
       kind: 'tool-result',
       toolName: extractString(message.toolName) ?? 'tool',
-      output: truncate(toolResultOutput(message.content), TOOL_OUTPUT_PREVIEW_CHARS),
+      output: truncate(
+        unwrapToolResultText(toolResultOutput(message.content)),
+        TOOL_OUTPUT_PREVIEW_CHARS
+      ),
       isError: message.isError === true,
       timestamp
     }

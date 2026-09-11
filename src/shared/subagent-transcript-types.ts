@@ -3,8 +3,10 @@
 
 export type SubagentTranscriptToolCall = {
   name: string
-  /** Brief, already-truncated argument preview. */
+  /** Brief, already-truncated human argument preview (never raw JSON). */
   input: string
+  /** Pretty-printed full arguments when they carry more than the preview; null otherwise. */
+  detail: string | null
 }
 
 export type SubagentTranscriptEvent =

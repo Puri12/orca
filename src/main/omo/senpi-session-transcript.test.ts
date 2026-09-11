@@ -5,15 +5,18 @@ import type { SubagentTranscriptEvent } from '../../shared/subagent-transcript-t
 import { parseSenpiTranscriptLine } from './senpi-session-transcript'
 
 const FIXTURE_DIR = join(__dirname, '__fixtures__', 'child-session-st_01a08fe1')
+// Why: real bytes from a child whose eval/todo/bash_output calls carry multi-key
+// arguments and whose eval results arrive JSON-enveloped — the raw-JSON shapes.
+const ENVELOPED_FIXTURE_DIR = join(__dirname, '__fixtures__', 'child-session-st_01a09032')
 
-function fixtureFiles(): string[] {
-  return readdirSync(FIXTURE_DIR)
+function fixtureFiles(dir = FIXTURE_DIR): string[] {
+  return readdirSync(dir)
     .filter((name) => name.endsWith('.jsonl'))
     .sort()
 }
 
-function parseFixture(name: string): SubagentTranscriptEvent[] {
-  return readFileSync(join(FIXTURE_DIR, name), 'utf8')
+function parseFixture(name: string, dir = FIXTURE_DIR): SubagentTranscriptEvent[] {
+  return readFileSync(join(dir, name), 'utf8')
     .split('\n')
     .map((line) => parseSenpiTranscriptLine(line))
     .filter((event): event is SubagentTranscriptEvent => event !== null)
@@ -151,6 +154,90 @@ describe('parseSenpiTranscriptLine', () => {
     expect(result.output.length).toBeLessThan(5_000)
     expect(result.isError).toBe(false)
     expect(result.timestamp).toBeNull()
+  })
+
+  describe('humanized tool calls and results', () => {
+    const events = parseFixture(fixtureFiles(ENVELOPED_FIXTURE_DIR)[0], ENVELOPED_FIXTURE_DIR)
+    const calls = ofKind(events, 'assistant').flatMap((event) => event.toolCalls)
+    const results = ofKind(events, 'tool-result')
+
+    it('previews an eval call by its code, never by its argument JSON', () => {
+      const evalCalls = calls.filter((call) => call.name === 'eval')
+      expect(evalCalls.length).toBeGreaterThanOrEqual(2)
+      expect(evalCalls[0].input).toBe('console.log("S1-boot");')
+      expect(evalCalls[1].input).toContain('sleep 10 && echo S2-done')
+      for (const call of calls) {
+        expect(call.input).not.toContain('{"')
+        expect(call.input).not.toContain('"action"')
+      }
+    })
+
+    it('keeps the full arguments as an expandable detail beside the preview', () => {
+      const evalCall = calls.find((call) => call.name === 'eval')
+      expect(evalCall?.detail).toContain(
+        '"summary": "Say S1-boot as first step of slow demo narration"'
+      )
+      expect(evalCall?.detail).toContain('"language": "js"')
+    })
+
+    it('previews a todo call by its op and first item, and bash_output by its id', () => {
+      const todoCalls = calls.filter((call) => call.name === 'todo')
+      expect(todoCalls.map((call) => call.input)).toEqual([
+        'init · Say S1-boot',
+        'done · Say S1-boot',
+        'done · Run bash sleep 10 && echo S2-done'
+      ])
+      expect(calls.find((call) => call.name === 'bash_output')?.input).toBe('bash_1')
+    })
+
+    it('unwraps the JSON envelope around an eval result to its text', () => {
+      const evalResults = results.filter((result) => result.toolName === 'eval')
+      expect(evalResults[0].output).toBe('S1-boot')
+      // Why: senpi capped this real envelope mid-string, so the unwrap cannot rely on valid JSON.
+      expect(evalResults[1].output.startsWith('Command is still running; auto-detached')).toBe(true)
+      expect(evalResults[1].output).toContain('Use kill_bash({ bash_id: "bash_1" })')
+      expect(evalResults[1].output).not.toContain('{"text"')
+      expect(results.find((result) => result.toolName === 'bash_output')?.output).toBe(
+        'status: running\n(no new output)'
+      )
+
+      const enveloped = parseSenpiTranscriptLine(
+        JSON.stringify({
+          type: 'message',
+          message: {
+            role: 'toolResult',
+            toolName: 'eval',
+            content: [{ type: 'text', text: '{"text":"S1-boot"}' }]
+          }
+        })
+      )
+      expect(enveloped?.kind === 'tool-result' && enveloped.output).toBe('S1-boot')
+    })
+
+    it('leaves a result whose text merely starts with a brace alone', () => {
+      const result = parseSenpiTranscriptLine(
+        JSON.stringify({
+          type: 'message',
+          message: {
+            role: 'toolResult',
+            toolName: 'bash',
+            content: [{ type: 'text', text: '{not json' }]
+          }
+        })
+      )
+      expect(result?.kind === 'tool-result' && result.output).toBe('{not json')
+      const numeric = parseSenpiTranscriptLine(
+        JSON.stringify({
+          type: 'message',
+          message: {
+            role: 'toolResult',
+            toolName: 'bash',
+            content: [{ type: 'text', text: '{"text":42}' }]
+          }
+        })
+      )
+      expect(numeric?.kind === 'tool-result' && numeric.output).toBe('{"text":42}')
+    })
   })
 
   it('strips carriage returns left by CRLF writers before parsing', () => {

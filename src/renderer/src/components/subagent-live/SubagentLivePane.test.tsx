@@ -34,7 +34,13 @@ function fixtureEvents(): SubagentTranscriptEvent[] {
     {
       kind: 'assistant',
       text: '> I read this as a quick sequential demo task\n\ns1-start',
-      toolCalls: [{ name: 'eval', input: 'tool.bash({ command: "sleep 4 && echo s2-tool-ok" })' }],
+      toolCalls: [
+        {
+          name: 'eval',
+          input: 'tool.bash({ command: "sleep 4 && echo s2-tool-ok" })',
+          detail: null
+        }
+      ],
       stopReason: null,
       timestamp
     },
