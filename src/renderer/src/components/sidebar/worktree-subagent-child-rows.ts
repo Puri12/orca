@@ -43,6 +43,8 @@ export function buildSubagentChildRows(args: {
       paneKey,
       worktreeId: args.parentEntry.worktreeId,
       tabId: args.parentEntry.tabId,
+      // Why: the child transcript lives under the parent process cwd, not the worktree root.
+      ...(args.parentEntry.sessionCwd ? { sessionCwd: args.parentEntry.sessionCwd } : {}),
       stateHistory: [],
       orchestration: {
         taskId: `subagent:${subagent.id}`,
