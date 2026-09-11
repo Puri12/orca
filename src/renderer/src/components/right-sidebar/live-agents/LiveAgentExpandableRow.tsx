@@ -1,8 +1,14 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { ArrowUpRight, ChevronRight, CornerDownRight, Radio } from 'lucide-react'
+import { ArrowUpRight, ChevronRight, CornerDownRight } from 'lucide-react'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
+import {
+  AGENT_ROW_ICON_BUTTON_CLASS as ROW_ICON_BUTTON_CLASS,
+  SubagentLiveOutputButton,
+  stopAgentRowKeyPropagation as stopRowKeyPropagation,
+  type OpenSubagentLive
+} from '@/components/sidebar/subagent-live-output-button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -17,17 +23,7 @@ import {
 import { dagStatusToDotState, type LiveAgentGraphNode } from './live-agent-sections'
 
 type ActivatePane = (tabId: string, paneKey: string) => void
-/** Open the floating live-output view for one child task; `sessionCwd` is the
- *  parent omo session's real cwd, where that child's transcript lives. */
-export type OpenSubagentLive = (taskId: string, label: string, sessionCwd: string | null) => void
-
-function stopRowKeyPropagation(e: React.KeyboardEvent): void {
-  // Why: the enclosing sidebar list treats Enter/Space as row activation; the
-  // disclosure and jump buttons need those keys to stay local.
-  if (e.key === 'Enter' || e.key === ' ') {
-    e.stopPropagation()
-  }
-}
+export type { OpenSubagentLive }
 
 const NUMERIC_DETAIL_LINE_KEYS: ReadonlySet<LiveAgentCurrentWorkLineKey> = new Set([
   'turns',
@@ -36,9 +32,6 @@ const NUMERIC_DETAIL_LINE_KEYS: ReadonlySet<LiveAgentCurrentWorkLineKey> = new S
   'runtime',
   'elapsed'
 ])
-
-const ROW_ICON_BUTTON_CLASS =
-  'flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-worktree-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring'
 
 function JumpToPaneButton({ onJump }: { onJump: () => void }): React.JSX.Element {
   const handleClick = useCallback(
@@ -62,32 +55,6 @@ function JumpToPaneButton({ onJump }: { onJump: () => void }): React.JSX.Element
       onKeyDown={stopRowKeyPropagation}
     >
       <ArrowUpRight className="size-3" aria-hidden />
-    </button>
-  )
-}
-
-function LiveOutputButton({ onOpen }: { onOpen: () => void }): React.JSX.Element {
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
-      e.stopPropagation()
-      onOpen()
-    },
-    [onOpen]
-  )
-  return (
-    <button
-      type="button"
-      data-live-agent-live-output
-      className={cn(ROW_ICON_BUTTON_CLASS, 'self-start')}
-      aria-label={translate(
-        'auto.components.right.sidebar.liveAgents.liveOutput',
-        'Open live output'
-      )}
-      title={translate('auto.components.right.sidebar.liveAgents.liveOutput', 'Open live output')}
-      onClick={handleClick}
-      onKeyDown={stopRowKeyPropagation}
-    >
-      <Radio className="size-3" aria-hidden />
     </button>
   )
 }
@@ -206,7 +173,9 @@ export function LiveAgentCompactRow({
             cacheTimerActive={false}
           />
         </div>
-        {taskId && onOpenSubagentLive ? <LiveOutputButton onOpen={openLive} /> : null}
+        {taskId && onOpenSubagentLive ? (
+          <SubagentLiveOutputButton onOpen={openLive} className="self-start" />
+        ) : null}
         <JumpToPaneButton onJump={jump} />
       </div>
       {open && <CurrentWorkDetail source={source} now={now} />}
@@ -304,7 +273,9 @@ export function LiveAgentGraphNodeRow({
             )}
           </button>
         </CollapsibleTrigger>
-        {taskId && onOpenSubagentLive ? <LiveOutputButton onOpen={openLive} /> : null}
+        {taskId && onOpenSubagentLive ? (
+          <SubagentLiveOutputButton onOpen={openLive} className="self-start" />
+        ) : null}
         <JumpToPaneButton onJump={onJump} />
       </div>
       {open && <CurrentWorkDetail source={source} now={now} />}

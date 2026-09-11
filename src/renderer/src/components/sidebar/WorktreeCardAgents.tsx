@@ -27,7 +27,9 @@ import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { translate } from '@/i18n/i18n'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
+import { openSubagentLiveInFloatingWorkspace } from '@/lib/open-subagent-live-in-floating-workspace'
 import { selectAcknowledgedAgentTimes } from './worktree-card-agent-ack-inputs'
+import type { OpenSubagentLive } from './subagent-live-output-button'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -192,6 +194,18 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   const handleActivateRetainedAgent = useCallback(() => {
     // Why: hibernation-retained rows are passive completion evidence; activating would resume sleeping sessions, so the row is inert.
   }, [])
+  // Why: the child transcript lives under the row's own parent-session cwd (omo may run from
+  // a subdirectory); the worktree path is only a last resort for hooks that never reported it.
+  const handleOpenSubagentLive = useCallback<OpenSubagentLive>(
+    (taskId, label, sessionCwd) => {
+      const worktreeCwd =
+        sessionCwd ?? useAppStore.getState().getKnownWorktreeById(worktreeId)?.path ?? null
+      if (worktreeCwd) {
+        openSubagentLiveInFloatingWorkspace({ worktreeCwd, taskId, label })
+      }
+    },
+    [worktreeId]
+  )
 
   // Why: one 30s tick per non-empty inline list; zero-agent cards never mount this (see WorktreeCardAgents), so idle worktrees pay no timer cost.
   const now = useNow(30_000)
@@ -290,6 +304,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
           // Why: hierarchy shows via chevron + indent; legacy L-connectors use a fixed offset that mismatches the column and reads as floating fragments.
           hideLineageConnectors
+          onOpenSubagentLive={handleOpenSubagentLive}
         />
         {hasChildAgents && expanded ? (
           <div className="worktree-agent-lineage-children">
@@ -341,6 +356,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
           cacheTimerActive={cacheTimerActive}
+          onOpenSubagentLive={handleOpenSubagentLive}
         />
         {hasChildAgents ? (
           <CompactAgentExpansion expanded={expanded}>

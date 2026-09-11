@@ -15,6 +15,10 @@ import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardD
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import {
+  SubagentLiveOutputButton,
+  type OpenSubagentLive
+} from '@/components/sidebar/subagent-live-output-button'
 
 function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts
@@ -67,6 +71,8 @@ type Props = {
   sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
   sendTargetDisabledReason?: string
   onSendTargetClick?: (paneKey: string) => void
+  /** Offered on subagent rows bound to a child task; opens that child's live transcript. */
+  onOpenSubagentLive?: OpenSubagentLive
 }
 
 const DashboardAgentRow = React.memo(function DashboardAgentRow({
@@ -86,7 +92,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   hideLineageConnectors = false,
   sendTargetStatus,
   sendTargetDisabledReason,
-  onSendTargetClick
+  onSendTargetClick,
+  onOpenSubagentLive
 }: Props) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -125,6 +132,17 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     },
     [agent.paneKey, onSendTargetClick, sendTargetStatus]
   )
+  const subagentTaskId = agent.rowSource === 'subagent' ? agent.job?.taskId : undefined
+  // Why: a synthetic subagent row stores the child's description as its prompt.
+  const openSubagentLive = useCallback(() => {
+    if (subagentTaskId) {
+      onOpenSubagentLive?.(
+        subagentTaskId,
+        agent.entry.prompt || subagentTaskId,
+        agent.entry.sessionCwd ?? null
+      )
+    }
+  }, [agent.entry.prompt, agent.entry.sessionCwd, onOpenSubagentLive, subagentTaskId])
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
   const conversationName = useAgentRowConversationName(agent)
@@ -283,6 +301,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
             +{childAgentCount}
           </span>
         )}
+        {subagentTaskId && onOpenSubagentLive ? (
+          <SubagentLiveOutputButton onOpen={openSubagentLive} />
+        ) : null}
         <DashboardAgentRowTrailingControls
           paneKey={agent.paneKey}
           relativeTimestamp={relativeTimestamp}

@@ -14,6 +14,7 @@ import { useAgentRowConversationName } from '@/components/dashboard/use-agent-ro
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { SubagentLiveOutputButton, type OpenSubagentLive } from './subagent-live-output-button'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -89,6 +90,8 @@ type CompactAgentRowProps = {
   isFocusedPane?: boolean
   hideIdentityIcon?: boolean
   cacheTimerActive?: boolean
+  /** Offered on subagent rows bound to a child task; opens that child's live transcript. */
+  onOpenSubagentLive?: OpenSubagentLive
 }
 
 export const CompactAgentRow = React.memo(function CompactAgentRow({
@@ -104,7 +107,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   reserveDisclosureGutter = false,
   isFocusedPane = false,
   hideIdentityIcon = false,
-  cacheTimerActive = true
+  cacheTimerActive = true,
+  onOpenSubagentLive
 }: CompactAgentRowProps) {
   const hasChildDisclosure =
     typeof childAgentCount === 'number' &&
@@ -184,6 +188,17 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     },
     [onToggleChildAgents]
   )
+  const subagentTaskId = agent.rowSource === 'subagent' ? agent.job?.taskId : undefined
+  // Why: a synthetic subagent row stores the child's description as its prompt.
+  const openSubagentLive = useCallback(() => {
+    if (subagentTaskId) {
+      onOpenSubagentLive?.(
+        subagentTaskId,
+        agent.entry.prompt || subagentTaskId,
+        agent.entry.sessionCwd ?? null
+      )
+    }
+  }, [agent.entry.prompt, agent.entry.sessionCwd, onOpenSubagentLive, subagentTaskId])
 
   const rowBody = (
     <>
@@ -276,6 +291,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           {shortTime}
         </span>
       )}
+      {subagentTaskId && onOpenSubagentLive ? (
+        <SubagentLiveOutputButton onOpen={openSubagentLive} />
+      ) : null}
     </>
   )
 
