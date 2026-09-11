@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { openSubagentLiveInFloatingWorkspace } from '@/lib/open-subagent-live-in-floating-workspace'
+import type { Worktree } from '../../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
@@ -26,8 +28,12 @@ vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
+vi.mock('@/lib/open-subagent-live-in-floating-workspace', () => ({
+  openSubagentLiveInFloatingWorkspace: vi.fn()
+}))
 
 const WORKTREE_ID = 'repo-1::/repo/worktrees/omo'
+const WORKTREE_PATH = '/repo/worktrees/omo'
 const TAB_ID = 'tab-omo'
 const PANE_KEY = `${TAB_ID}:11111111-1111-4111-8111-111111111111`
 const NOW = 600_000
@@ -101,12 +107,20 @@ const initialState = useAppStore.getState()
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
-function seed(entry: AgentStatusEntry): void {
+function seed(entry: AgentStatusEntry, options: { withWorktreePath?: boolean } = {}): void {
   act(() => {
     useAppStore.setState({
       activeWorktreeId: WORKTREE_ID,
       tabsByWorktree: { [WORKTREE_ID]: [tab] },
-      agentStatusByPaneKey: { [PANE_KEY]: entry }
+      agentStatusByPaneKey: { [PANE_KEY]: entry },
+      worktreesByRepo:
+        options.withWorktreePath === false
+          ? {}
+          : {
+              'repo-1': [
+                { id: WORKTREE_ID, repoId: 'repo-1', path: WORKTREE_PATH } as unknown as Worktree
+              ]
+            }
     })
   })
 }
@@ -143,6 +157,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW)
   vi.mocked(activateTabAndFocusPane).mockClear()
   vi.mocked(activateAndRevealWorktree).mockClear()
+  vi.mocked(openSubagentLiveInFloatingWorkspace).mockClear()
 })
 
 afterEach(() => {
@@ -377,5 +392,48 @@ describe('LiveAgentsPanel', () => {
     })
     const host = mount()
     expect(host.textContent).toContain('No agents are reporting in this workspace')
+  })
+
+  it('opens the floating Subagent-Live view bound to the child task and workspace path', () => {
+    seed(makeEntry({ jobGraph }))
+    const host = mount()
+
+    // Why: the root omo pane has no child task id, so it must not offer live output.
+    const rootRow = host.querySelector<HTMLElement>(`[data-live-agent-row="${PANE_KEY}"]`)
+    expect(rootRow?.querySelector('[data-live-agent-live-output]')).toBeNull()
+
+    click(host.querySelector('[data-live-agent-node="A"] [data-live-agent-live-output]'))
+    expect(openSubagentLiveInFloatingWorkspace).toHaveBeenCalledWith({
+      worktreeCwd: WORKTREE_PATH,
+      taskId: 'task-map',
+      label: 'Map shell navigation'
+    })
+    expect(activateTabAndFocusPane).not.toHaveBeenCalled()
+
+    // Why: a node the DAG never bound to a task has no transcript to tail.
+    expect(
+      host.querySelector('[data-live-agent-node="C"] [data-live-agent-live-output]')
+    ).toBeNull()
+  })
+
+  it('offers live output on flat subagent rows and hides it when the workspace path is unknown', () => {
+    seed(makeEntry())
+    const host = mount()
+    const child = [...host.querySelectorAll<HTMLElement>('[data-live-agent-row]')].find(
+      (el) => el.getAttribute('data-live-agent-row') === `${PANE_KEY}\u0000subagent:map`
+    )
+    click(child?.querySelector('[data-live-agent-live-output]'))
+    expect(openSubagentLiveInFloatingWorkspace).toHaveBeenCalledWith({
+      worktreeCwd: WORKTREE_PATH,
+      taskId: 'task-map',
+      label: 'Map shell navigation'
+    })
+
+    act(() => root?.unmount())
+    root = null
+    container?.remove()
+    seed(makeEntry(), { withWorktreePath: false })
+    const rehost = mount()
+    expect(rehost.querySelector('[data-live-agent-live-output]')).toBeNull()
   })
 })

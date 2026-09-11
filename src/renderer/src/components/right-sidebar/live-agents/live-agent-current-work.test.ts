@@ -152,11 +152,13 @@ describe('buildCurrentWorkDetail', () => {
     const unstarted = currentWorkSourceFromGraphNode({
       node: { id: 'B', label: 'Build', status: 'succeeded', runStats },
       row: null,
+      taskId: null,
       dependsOnLabels: []
     })
     const started = currentWorkSourceFromGraphNode({
       node: { id: 'B', label: 'Build', status: 'succeeded', runStats },
       row: makeRow({}, { job: { lifecycle: 'succeeded', runStats: { turns: 4 } } }),
+      taskId: null,
       dependsOnLabels: []
     })
 
@@ -185,6 +187,7 @@ describe('buildCurrentWorkDetail', () => {
         startedAt: NOW - 90_000
       },
       row: null,
+      taskId: null,
       dependsOnLabels: []
     })
 
@@ -216,6 +219,7 @@ describe('buildCurrentWorkDetail', () => {
         startedAt: NOW - 60 * 60_000
       },
       row,
+      taskId: null,
       dependsOnLabels: []
     })
 

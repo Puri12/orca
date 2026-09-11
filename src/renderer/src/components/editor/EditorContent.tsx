@@ -3,6 +3,7 @@ import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/sl
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
+import { SubagentLivePane } from '@/components/subagent-live/SubagentLivePane'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
@@ -143,6 +144,27 @@ export function EditorContent({
         onRefresh={() => {
           void reloadOpenCheckRunDetailsTab(activeFile.id)
         }}
+      />
+    )
+  }
+
+  if (activeFile.mode === 'subagent-live') {
+    const binding = activeFile.subagentLive
+    if (!binding) {
+      return (
+        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          {translate(
+            'auto.components.editor.EditorContent.subagentLiveUnavailable',
+            'Subagent transcript is unavailable.'
+          )}
+        </div>
+      )
+    }
+    return (
+      <SubagentLivePane
+        worktreeCwd={binding.worktreeCwd}
+        taskId={binding.taskId}
+        label={binding.label}
       />
     )
   }

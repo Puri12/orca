@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { ArrowUpRight, ChevronRight, CornerDownRight } from 'lucide-react'
+import { ArrowUpRight, ChevronRight, CornerDownRight, Radio } from 'lucide-react'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { CompactAgentRow } from '@/components/sidebar/worktree-card-compact-agent-row'
@@ -17,6 +17,8 @@ import {
 import { dagStatusToDotState, type LiveAgentGraphNode } from './live-agent-sections'
 
 type ActivatePane = (tabId: string, paneKey: string) => void
+/** Open the floating live-output view for one child task. */
+export type OpenSubagentLive = (taskId: string, label: string) => void
 
 function stopRowKeyPropagation(e: React.KeyboardEvent): void {
   // Why: the enclosing sidebar list treats Enter/Space as row activation; the
@@ -59,6 +61,32 @@ function JumpToPaneButton({ onJump }: { onJump: () => void }): React.JSX.Element
       onKeyDown={stopRowKeyPropagation}
     >
       <ArrowUpRight className="size-3" aria-hidden />
+    </button>
+  )
+}
+
+function LiveOutputButton({ onOpen }: { onOpen: () => void }): React.JSX.Element {
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation()
+      onOpen()
+    },
+    [onOpen]
+  )
+  return (
+    <button
+      type="button"
+      data-live-agent-live-output
+      className={cn(ROW_ICON_BUTTON_CLASS, 'self-start')}
+      aria-label={translate(
+        'auto.components.right.sidebar.liveAgents.liveOutput',
+        'Open live output'
+      )}
+      title={translate('auto.components.right.sidebar.liveAgents.liveOutput', 'Open live output')}
+      onClick={handleClick}
+      onKeyDown={stopRowKeyPropagation}
+    >
+      <Radio className="size-3" aria-hidden />
     </button>
   )
 }
@@ -135,11 +163,13 @@ export function LiveAgentCompactRow({
   agent,
   now,
   onActivate,
+  onOpenSubagentLive,
   isFocusedPane
 }: {
   agent: DashboardAgentRow
   now: number
   onActivate: ActivatePane
+  onOpenSubagentLive?: OpenSubagentLive
   isFocusedPane: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
@@ -150,6 +180,13 @@ export function LiveAgentCompactRow({
     [agent.activationPaneKey, agent.paneKey, agent.tab.id, onActivate]
   )
   const source = useMemo(() => currentWorkSourceFromRow(agent), [agent])
+  const taskId = agent.job?.taskId
+  // Why: a synthetic subagent row stores the child's description as its prompt.
+  const openLive = useCallback(() => {
+    if (taskId) {
+      onOpenSubagentLive?.(taskId, agent.entry.prompt || taskId)
+    }
+  }, [agent.entry.prompt, onOpenSubagentLive, taskId])
   return (
     <Collapsible
       open={open}
@@ -168,6 +205,7 @@ export function LiveAgentCompactRow({
             cacheTimerActive={false}
           />
         </div>
+        {taskId && onOpenSubagentLive ? <LiveOutputButton onOpen={openLive} /> : null}
         <JumpToPaneButton onJump={jump} />
       </div>
       {open && <CurrentWorkDetail source={source} now={now} />}
@@ -179,13 +217,21 @@ export function LiveAgentCompactRow({
 export function LiveAgentGraphNodeRow({
   graphNode,
   now,
-  onJump
+  onJump,
+  onOpenSubagentLive
 }: {
   graphNode: LiveAgentGraphNode
   now: number
   onJump: () => void
+  onOpenSubagentLive?: OpenSubagentLive
 }): React.JSX.Element {
   const { node, dependsOnLabels } = graphNode
+  const taskId = graphNode.taskId
+  const openLive = useCallback(() => {
+    if (taskId) {
+      onOpenSubagentLive?.(taskId, node.label)
+    }
+  }, [node.label, onOpenSubagentLive, taskId])
   const [open, setOpen] = useState(false)
   const source = useMemo(() => currentWorkSourceFromGraphNode(graphNode), [graphNode])
   const dotState = dagStatusToDotState(node.status)
@@ -254,6 +300,7 @@ export function LiveAgentGraphNodeRow({
             )}
           </button>
         </CollapsibleTrigger>
+        {taskId && onOpenSubagentLive ? <LiveOutputButton onOpen={openLive} /> : null}
         <JumpToPaneButton onJump={onJump} />
       </div>
       {open && <CurrentWorkDetail source={source} now={now} />}

@@ -2,6 +2,7 @@ import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-t
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { isSubagentLiveFileId } from '@/lib/subagent-live-file-id'
 import {
   adoptGrouplessTabs,
   appendOwnedTabIdsToGroups,
@@ -131,6 +132,11 @@ function hydrateUnifiedFormat(
         // contain the separator, so re-deriving the document from it is guesswork. The reader
         // reopens the preview; nothing is left pointing at a surface that cannot exist.
         if (tab.contentType === 'editor' && tab.entityId.startsWith('html-preview::')) {
+          return false
+        }
+        // Why: a Subagent-Live tab follows a running child's transcript; its OpenFile is never
+        // persisted, so restored chrome would name a view nothing backs.
+        if (tab.contentType === 'editor' && isSubagentLiveFileId(tab.entityId)) {
           return false
         }
         if (!isTransientEditorContentType(tab.contentType)) {

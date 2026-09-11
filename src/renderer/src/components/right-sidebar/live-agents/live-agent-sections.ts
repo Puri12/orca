@@ -12,6 +12,8 @@ export type LiveAgentGraphNode = {
   node: DagNode
   /** Live roster row backing this node; null while omo has not started it. */
   row: DashboardAgentRow | null
+  /** The child's senpi-task id when the DAG or roster reports one. */
+  taskId: string | null
   dependsOnLabels: string[]
 }
 
@@ -108,11 +110,15 @@ function buildWaves(
     labels.push(label)
     dependencyLabelsById.set(edge.to, labels)
   }
-  const toGraphNode = (node: DagNode): LiveAgentGraphNode => ({
-    node,
-    row: rowByTask.get(taskIdByNodeId.get(node.id) ?? node.id) ?? null,
-    dependsOnLabels: dependencyLabelsById.get(node.id) ?? []
-  })
+  const toGraphNode = (node: DagNode): LiveAgentGraphNode => {
+    const row = rowByTask.get(taskIdByNodeId.get(node.id) ?? node.id) ?? null
+    return {
+      node,
+      row,
+      taskId: row?.job?.taskId ?? taskIdByNodeId.get(node.id) ?? null,
+      dependsOnLabels: dependencyLabelsById.get(node.id) ?? []
+    }
+  }
   const waves: LiveAgentWave[] = []
   const placed = new Set<string>()
   const reported = vm.waves && vm.waves.length > 0 ? vm.waves : deriveWaves(vm)

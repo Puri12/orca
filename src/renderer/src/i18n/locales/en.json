@@ -11808,6 +11808,22 @@
           "label": "Supported agents:"
         }
       },
+      "subagentLive": {
+        "status": {
+          "live": "Live",
+          "noTranscript": "No transcript",
+          "error": "Error",
+          "connecting": "Connecting…"
+        },
+        "missing": {
+          "title": "No live transcript for this subagent",
+          "detail": "In-process subagents write no session file. Set task.default_execution_mode to \"process\" in omo so each child runs as its own senpi process with a tailable transcript."
+        },
+        "error": {
+          "title": "Could not read the subagent transcript"
+        },
+        "followTail": "Follow"
+      },
       "right": {
         "sidebar": {
           "BulkActionBar": {
@@ -13307,6 +13323,7 @@
           },
           "liveAgents": {
             "jumpToPane": "Jump to agent pane",
+            "liveOutput": "Open live output",
             "hideDetail": "Hide current work",
             "showDetail": "Show current work",
             "noActivity": "No current activity reported",
@@ -14646,7 +14663,8 @@
           "3c6e71df22": "Text diff is unavailable for this file in branch compare.",
           "d07e4b8553": "branch",
           "d16e037f40": "rich",
-          "6c4f1a8d2e": "Check details are unavailable."
+          "6c4f1a8d2e": "Check details are unavailable.",
+          "subagentLiveUnavailable": "Subagent transcript is unavailable."
         },
         "EditorPanelHeader": {
           "fb8331694e": "Open Preview to the Side",

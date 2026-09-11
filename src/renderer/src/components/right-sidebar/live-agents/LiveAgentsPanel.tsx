@@ -4,12 +4,18 @@ import { useWorktreeAgentRows } from '@/components/sidebar/useWorktreeAgentRows'
 import { useFocusedAgentPaneKey } from '@/components/sidebar/focused-agent-row-highlight'
 import { useNow } from '@/hooks/use-now'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { openSubagentLiveInFloatingWorkspace } from '@/lib/open-subagent-live-in-floating-workspace'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useActiveWorktreeId } from '@/store/selectors'
+import { useAppStore } from '@/store'
 import { parsePaneKey } from '../../../../../shared/stable-pane-id'
-import { LiveAgentCompactRow, LiveAgentGraphNodeRow } from './LiveAgentExpandableRow'
+import {
+  LiveAgentCompactRow,
+  LiveAgentGraphNodeRow,
+  type OpenSubagentLive
+} from './LiveAgentExpandableRow'
 import {
   buildLiveAgentSections,
   type LiveAgentSection,
@@ -28,11 +34,13 @@ function activateAgentPane(worktreeId: string, tabId: string, paneKey: string): 
 function WaveGroup({
   wave,
   now,
-  onJump
+  onJump,
+  onOpenSubagentLive
 }: {
   wave: LiveAgentWave
   now: number
   onJump: () => void
+  onOpenSubagentLive?: OpenSubagentLive
 }) {
   return (
     <div
@@ -52,6 +60,7 @@ function WaveGroup({
             graphNode={graphNode}
             now={now}
             onJump={onJump}
+            onOpenSubagentLive={onOpenSubagentLive}
           />
         ))}
       </div>
@@ -63,11 +72,13 @@ function AgentSection({
   section,
   now,
   onActivate,
+  onOpenSubagentLive,
   focusedPaneKey
 }: {
   section: LiveAgentSection
   now: number
   onActivate: (tabId: string, paneKey: string) => void
+  onOpenSubagentLive?: OpenSubagentLive
   focusedPaneKey: string | null
 }) {
   const { root, children, waves, runLabel } = section
@@ -98,7 +109,13 @@ function AgentSection({
             </div>
           ) : null}
           {waves.map((wave) => (
-            <WaveGroup key={wave.key} wave={wave} now={now} onJump={jumpToRoot} />
+            <WaveGroup
+              key={wave.key}
+              wave={wave}
+              now={now}
+              onJump={jumpToRoot}
+              onOpenSubagentLive={onOpenSubagentLive}
+            />
           ))}
         </div>
       ) : children.length > 0 ? (
@@ -109,6 +126,7 @@ function AgentSection({
               agent={child}
               now={now}
               onActivate={onActivate}
+              onOpenSubagentLive={onOpenSubagentLive}
               isFocusedPane={child.paneKey === focusedPaneKey}
             />
           ))}
@@ -132,6 +150,18 @@ export default function LiveAgentsPanel(): React.JSX.Element {
       }
     },
     [worktreeId]
+  )
+  // Why: the child transcript lives under the workspace the omo pane runs in, so the
+  // action is only offered once that path resolves (git worktree or folder workspace).
+  const worktreeCwd = useAppStore((state) =>
+    worktreeId ? (state.getKnownWorktreeById(worktreeId)?.path ?? null) : null
+  )
+  const onOpenSubagentLive = useMemo<OpenSubagentLive | undefined>(
+    () =>
+      worktreeCwd
+        ? (taskId, label) => openSubagentLiveInFloatingWorkspace({ worktreeCwd, taskId, label })
+        : undefined,
+    [worktreeCwd]
   )
 
   if (!worktreeId) {
@@ -177,6 +207,7 @@ export default function LiveAgentsPanel(): React.JSX.Element {
             section={section}
             now={now}
             onActivate={onActivate}
+            onOpenSubagentLive={onOpenSubagentLive}
             focusedPaneKey={focusedPaneKey}
           />
         ))

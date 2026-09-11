@@ -78,6 +78,14 @@ export type ConflictReviewState = {
   selectedFileId?: string
 }
 
+export type SubagentLiveBinding = {
+  /** Filesystem path of the workspace the omo pane runs in. */
+  worktreeCwd: string
+  /** The child's senpi-task id (`job.taskId`). */
+  taskId: string
+  label: string
+}
+
 export type CombinedDiffSkippedConflict = {
   path: string
   conflictKind: GitConflictKind
@@ -138,13 +146,15 @@ export type OpenFile = {
   fileContentReloadNonce?: number
   /** Why: CI check-details tabs are virtual editor tabs backed by fetched PR check-run metadata, not a file on disk. */
   checkRunDetails?: OpenCheckRunDetailsState
+  /** Why: Subagent-Live tabs are virtual editor tabs bound to an omo child's transcript directory, not a file on disk. */
+  subagentLive?: SubagentLiveBinding
   /** Why: web-client tab mirrored from the host snapshot; only mirrored tabs may be culled when they vanish, locally-opened tabs must survive. */
   mirroredFromRuntimeSession?: boolean
   /** Why: orthogonal to `mode` — an edit-mode tab that must never accept edits/autosave/rename (AI Vault View Log). Persisted only when true. */
   readOnly?: boolean
   /** Why: explicit live tail, only meaningful for a read-only local log. */
   liveTail?: boolean
-  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
+  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details' | 'subagent-live'
 }
 
 export type ActivityBarPosition = 'top' | 'side'

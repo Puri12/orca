@@ -74,6 +74,7 @@ export function disposeClosedEditorTabs(
       case 'conflict-review':
         break
       case 'check-details':
+      case 'subagent-live':
         break
     }
   }
