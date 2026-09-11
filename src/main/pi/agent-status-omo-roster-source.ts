@@ -4,11 +4,10 @@ import { getOmoWorkflowHelperLines } from './agent-status-omo-workflow-source'
 // (omo exposes no separate child inventory). Kept in its own module so the shared handler-source
 // file stays under the max-lines ratchet; only kind === 'omo' concatenates these lines.
 export function getOmoJobRosterHelperLines(): string[] {
-  // Why: session cwd is fixed for the omo process (transcripts live under it, not always under worktree); captured once at load.
-  const sessionCwd = typeof process !== 'undefined' ? process.cwd() : undefined
-
   return [
-    `  const sessionCwd = ${JSON.stringify(sessionCwd)};`,
+    // Why: omo writes child transcripts under the omo process's own cwd (not always the worktree),
+    // so the extension reads it at load time inside that process — never baked in by the generator.
+    "  const sessionCwd = typeof process !== 'undefined' && typeof process.cwd === 'function' ? process.cwd() : undefined",
     '  // Why: omo exposes task executions, not a separate background-job inventory.',
     '  const TERMINAL_JOB_STATUS = {',
     "    completed: 'succeeded', failed: 'failed', error: 'failed',",

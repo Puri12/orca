@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { createAgentStatusPostingHarness as createHarness } from './agent-status-extension-test-harness'
+import {
+  HARNESS_SESSION_CWD,
+  createAgentStatusPostingHarness as createHarness
+} from './agent-status-extension-test-harness'
 
 const workflowDefinition = {
   key: 'pipeline',
@@ -178,10 +181,13 @@ describe('omo workflow graph', () => {
     expect(late.jobGraph).toEqual({ nodes: [{ nodeId: 'D', dependsOn: [] }] })
   })
 
-  it('emits sessionCwd only for omo payloads (process.cwd of session)', async () => {
+  it('emits the omo session cwd read inside the session, only for omo payloads', async () => {
     const harness = createHarness()
     const omoPayload = await harness.post('tool_execution_start', task('t1'))
-    expect(omoPayload).toHaveProperty('sessionCwd', process.cwd())
+    // Why: the generator runs in Orca while the omo session runs elsewhere; the harness cwd is
+    // foreign to this test process, so a value baked in at generation time cannot satisfy this.
+    expect(omoPayload).toHaveProperty('sessionCwd', HARNESS_SESSION_CWD)
+    expect(omoPayload.sessionCwd).not.toBe(process.cwd())
     const nonOmoHarness = createHarness({ kind: 'pi' })
     const piPayload = await nonOmoHarness.post('tool_execution_start', {
       toolName: 'task',

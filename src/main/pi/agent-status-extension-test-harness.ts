@@ -6,6 +6,9 @@ import { expect, vi } from 'vitest'
 
 import { getPiAgentStatusExtensionSource } from './agent-status-extension-source'
 
+// Why: a deliberately foreign path so a test can tell "read inside the session" from "baked in by the generator".
+export const HARNESS_SESSION_CWD = '/harness/omo-session-cwd'
+
 export type HookContext = {
   isIdle?: () => boolean
   sessionManager?: {
@@ -149,7 +152,9 @@ export function createAgentStatusExtensionHarness(args: {
     },
     pid: args.pid ?? AGENT_STATUS_EXTENSION_SELF_PID,
     title: args.title ?? 'node',
-    argv: args.argv ?? ['node', '/usr/bin/orca']
+    argv: args.argv ?? ['node', '/usr/bin/orca'],
+    // Why: the omo session's cwd, not the test runner's; the extension must read it at load.
+    cwd: () => HARNESS_SESSION_CWD
   }
 
   const context = {
