@@ -26,6 +26,7 @@ import { registerRuntimeEnvironmentHandlers } from '../runtime-environments'
 import { registerEphemeralVmHandlers } from '../ephemeral-vm'
 import { registerAiVaultHandlers } from '../ai-vault'
 import { registerNativeChatHandlers } from '../native-chat'
+import { registerSubagentTranscriptHandlers } from '../subagent-transcript'
 import { registerNotificationHandlers } from '../notifications'
 import { registerNotebookHandlers } from '../notebook'
 import { registerOnboardingHandlers } from '../onboarding'
@@ -228,6 +229,7 @@ export function registerCoreHandlers(
       prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
   })
   registerNativeChatHandlers()
+  registerSubagentTranscriptHandlers()
   registerClipboardHandlers(store)
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)

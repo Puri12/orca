@@ -52,6 +52,7 @@ import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/reposit
 import type { RuntimeApi } from './api/runtime-api'
 import type { KeybindingsApi, SettingsApi } from './api/settings-api'
 import type { ShellApi } from './api/shell-api'
+import type { SubagentTranscriptApi } from './api/subagent-transcript-api'
 import type { SpeechApi } from './api/speech-api'
 import type { SshApi } from './api/ssh-api'
 import type { DiagnosticsApi, MemoryApi, StatsApi, TelemetryApi } from './api/telemetry-api'
@@ -148,6 +149,7 @@ export type PreloadApi = {
   gitBash: RuntimeApi['gitBash']
   plugins: PluginsApi
   agentStatus: AgentStatusApi
+  subagentTranscript: SubagentTranscriptApi
   mobile: MobileApi
   speech: SpeechApi
 }
